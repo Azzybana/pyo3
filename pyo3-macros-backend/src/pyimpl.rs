@@ -57,7 +57,7 @@ pub struct PyImplOptions {
 
 impl PyImplOptions {
     pub fn from_attrs(attrs: &mut Vec<syn::Attribute>) -> Result<Self> {
-        let mut options: PyImplOptions = Default::default();
+        let mut options: PyImplOptions = PyImplOptions::default();
 
         for option in take_pyo3_options(attrs)? {
             match option {
@@ -85,7 +85,7 @@ pub fn build_py_methods(
 ) -> syn::Result<TokenStream> {
     if let Some((_, path, _)) = &ast.trait_ {
         bail_spanned!(path.span() => "#[pymethods] cannot be used on trait impl blocks");
-    } else if ast.generics != Default::default() {
+    } else if ast.generics != syn::Generics::default() {
         bail_spanned!(
             ast.generics.span() =>
             "#[pymethods] cannot be used with lifetime parameters or generics"
