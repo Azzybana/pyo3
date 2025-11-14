@@ -259,7 +259,7 @@ pub fn gen_py_method(
             }
         }
         // ordinary functions (with some specialties)
-        (_, FnType::Fn(_)) | (_, FnType::FnClass(_)) | (_, FnType::FnStatic) => {
+        (_, (FnType::Fn(_) | FnType::FnClass(_) | FnType::FnStatic)) => {
             GeneratedPyMethod::Method(impl_py_method_def(
                 cls,
                 spec,
@@ -333,6 +333,7 @@ fn ensure_no_forbidden_protocol_attributes(
 }
 
 /// Also used by pyfunction.
+#[allow(clippy::similar_names)]
 pub fn impl_py_method_def(
     cls: &syn::Type,
     spec: &FnSpec<'_>,
@@ -353,6 +354,7 @@ pub fn impl_py_method_def(
 }
 
 /// Also used by pyclass.
+#[allow(clippy::similar_names)]
 pub fn impl_py_method_def_new(
     cls: &syn::Type,
     spec: &FnSpec<'_>,
@@ -537,7 +539,7 @@ pub(crate) fn impl_py_class_attribute(
 
     let wrapper_ident = format_ident!("__pymethod_{}__", name);
     let python_name = spec.null_terminated_python_name();
-    let body = quotes::ok_wrap(fncall, ctx);
+    let body = quotes::ok_wrap(&fncall, ctx);
 
     let associated_method = quote! {
         fn #wrapper_ident(py: #pyo3_path::Python<'_>) -> #pyo3_path::PyResult<#pyo3_path::Py<#pyo3_path::PyAny>> {
