@@ -1,4 +1,4 @@
-use crate::object::{PyVarObject, PyObject};
+use crate::object::{PyObject, PyVarObject};
 use crate::Py_ssize_t;
 #[cfg(not(Py_LIMITED_API))]
 use std::ffi::c_char;
