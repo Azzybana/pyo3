@@ -1,5 +1,8 @@
 use crate::methodobject::PyMethodDef;
-use crate::object::{PyTypeObject, PyObject, PyObject_TypeCheck, Py_TYPE, PyObject_HEAD_INIT, traverseproc, inquiry, freefunc};
+use crate::object::{
+    freefunc, inquiry, traverseproc, PyObject, PyObject_HEAD_INIT, PyObject_TypeCheck,
+    PyTypeObject, Py_TYPE,
+};
 use crate::pyport::Py_ssize_t;
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr::addr_of_mut;
