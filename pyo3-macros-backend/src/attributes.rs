@@ -112,10 +112,7 @@ fn parse_shorthand_format(fmt: LitStr) -> Result<(LitStr, Vec<Member>)> {
             tracker += 2;
             continue;
         }
-        let next = match read.chars().next() {
-            Some(next) => next,
-            None => break,
-        };
+        let Some(next) = read.chars().next() else { break };
         tracker += 1;
         let member = match next {
             '0'..='9' => {
@@ -169,7 +166,7 @@ impl Parse for crate::attributes::StringFormatter {
 impl ToTokens for crate::attributes::StringFormatter {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.fmt.to_tokens(tokens);
-        tokens.extend(quote! {self.args})
+        tokens.extend(quote! {self.args});
     }
 }
 
@@ -199,7 +196,7 @@ impl<T: Parse> Parse for LitStrValue<T> {
 
 impl<T: ToTokens> ToTokens for LitStrValue<T> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.0.to_tokens(tokens)
+        self.0.to_tokens(tokens);
     }
 }
 
@@ -220,7 +217,7 @@ impl Parse for NameLitStr {
 
 impl ToTokens for NameLitStr {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.0.to_tokens(tokens)
+        self.0.to_tokens(tokens);
     }
 }
 
@@ -269,7 +266,7 @@ impl Parse for RenamingRuleLitStr {
 
 impl ToTokens for RenamingRuleLitStr {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.lit.to_tokens(tokens)
+        self.lit.to_tokens(tokens);
     }
 }
 
