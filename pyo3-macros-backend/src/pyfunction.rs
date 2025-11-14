@@ -55,6 +55,9 @@ impl PyFunctionArgPyO3Attributes {
     ///
     /// # Errors
     /// Returns `Err` if an attribute parsing error occurs.
+    ///
+    /// # Errors
+    /// Returns `Err` if attribute parsing fails.
     pub fn from_attrs(attrs: &mut Vec<syn::Attribute>) -> syn::Result<Self> {
         let mut attributes = PyFunctionArgPyO3Attributes {
             from_py_with: None,
