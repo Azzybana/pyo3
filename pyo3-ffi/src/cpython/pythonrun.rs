@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::PyObject;
 #[cfg(not(any(PyPy, GraalPy, Py_LIMITED_API, Py_3_10)))]
 use crate::pyarena::PyArena;
 use crate::PyCompilerFlags;
@@ -136,6 +136,7 @@ extern "C" {
 
 #[inline]
 #[cfg(not(any(PyPy, GraalPy)))]
+#[must_use]
 pub unsafe fn Py_CompileString(string: *const c_char, p: *const c_char, s: c_int) -> *mut PyObject {
     Py_CompileStringExFlags(string, p, s, std::ptr::null_mut(), -1)
 }
