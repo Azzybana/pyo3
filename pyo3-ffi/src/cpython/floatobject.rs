@@ -10,15 +10,23 @@ pub struct PyFloatObject {
 }
 
 #[inline]
-pub unsafe fn _PyFloat_CAST(op: *mut PyObject) -> *mut PyFloatObject {
+pub unsafe fn PyFloat_CAST(op: *mut PyObject) -> *mut PyFloatObject {
     debug_assert_eq!(PyFloat_Check(op), 1);
     op.cast()
+}
+
+// Backwards-compatibility shim for callers that still use the underscore-prefixed name.
+// Keep this wrapper to avoid breaking external callers while addressing the clippy lint.
+#[allow(clippy::used_underscore_items)]
+#[deprecated(note = "use PyFloat_CAST instead")]
+pub unsafe fn _PyFloat_CAST(op: *mut PyObject) -> *mut PyFloatObject {
+    PyFloat_CAST(op)
 }
 
 #[inline]
 pub unsafe fn PyFloat_AS_DOUBLE(op: *mut PyObject) -> c_double {
     #[cfg(not(GraalPy))]
-    return (*_PyFloat_CAST(op)).ob_fval;
+    return (*PyFloat_CAST(op)).ob_fval;
     #[cfg(GraalPy)]
     return PyFloat_AsDouble(op);
 }
