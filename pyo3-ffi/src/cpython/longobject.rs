@@ -1,5 +1,5 @@
-use crate::longobject::*;
-use crate::object::*;
+use crate::longobject::PyLongObject;
+use crate::object::PyObject;
 #[cfg(Py_3_13)]
 use crate::pyport::Py_ssize_t;
 use libc::size_t;
