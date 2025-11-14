@@ -265,11 +265,16 @@ impl<'a, const REF: bool> Container<'a, REF> {
                     .item
                     .as_ref()
                     .and_then(|item| item.0.as_ref())
-                    .map(|item| item.into_token_stream())
-                    .unwrap_or_else(|| {
-                        let name = f.ident.unraw().to_string();
-                        self.rename_rule.map(|rule| utils::apply_renaming_rule(rule, &name)).unwrap_or(name).into_token_stream()
-                    });
+                    .map_or_else(
+                        || {
+                            let name = f.ident.unraw().to_string();
+                            self.rename_rule
+                                .map(|rule| utils::apply_renaming_rule(rule, &name))
+                                .unwrap_or(name)
+                                .into_token_stream()
+                        },
+                        |lit| quote::ToTokens::into_token_stream(lit),
+                    );
                 let value = Ident::new(&format!("arg{i}"), f.field.ty.span());
 
                 if let Some(expr_path) = f.into_py_with.as_ref().map(|i|&i.value) {
