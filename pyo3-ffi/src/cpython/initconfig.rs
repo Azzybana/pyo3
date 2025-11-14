@@ -15,7 +15,7 @@ pub enum _PyStatus_TYPE {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct PyStatus {
-    pub _type: _PyStatus_TYPE,
+    pub status_type: _PyStatus_TYPE,
     pub func: *const c_char,
     pub err_msg: *const c_char,
     pub exitcode: c_int,
@@ -54,7 +54,7 @@ extern "C" {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct PyPreConfig {
-    pub _config_init: c_int,
+    pub config_init: c_int,
     pub parse_argv: c_int,
     pub isolated: c_int,
     pub use_environment: c_int,
@@ -80,7 +80,7 @@ extern "C" {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct PyConfig {
-    pub _config_init: c_int,
+    pub config_init: c_int,
     pub isolated: c_int,
     pub use_environment: c_int,
     pub dev_mode: c_int,
@@ -89,7 +89,7 @@ pub struct PyConfig {
     pub hash_seed: c_ulong,
     pub faulthandler: c_int,
     #[cfg(all(Py_3_9, not(Py_3_10)))]
-    pub _use_peg_parser: c_int,
+    pub use_peg_parser: c_int,
     pub tracemalloc: c_int,
     #[cfg(Py_3_12)]
     pub perf_profiling: c_int,
@@ -181,14 +181,14 @@ pub struct PyConfig {
     pub run_filename: *mut wchar_t,
     #[cfg(Py_3_13)]
     pub sys_path_0: *mut wchar_t,
-    pub _install_importlib: c_int,
-    pub _init_main: c_int,
+    pub install_importlib: c_int,
+    pub init_main: c_int,
     #[cfg(all(Py_3_9, not(Py_3_12)))]
-    pub _isolated_interpreter: c_int,
+    pub isolated_interpreter: c_int,
     #[cfg(Py_3_11)]
-    pub _is_python_build: c_int,
+    pub is_python_build: c_int,
     #[cfg(all(Py_3_9, not(Py_3_10)))]
-    pub _orig_argv: PyWideStringList,
+    pub orig_argv: PyWideStringList,
     #[cfg(all(Py_3_13, py_sys_config = "Py_DEBUG"))]
     pub run_presite: *mut wchar_t,
 }
