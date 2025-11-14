@@ -8,7 +8,7 @@ use pyo3_build_config::{
     warn, PythonImplementation,
 };
 
-/// Minimum Python version PyO3 supports.
+/// Minimum Python version `PyO3` supports.
 struct SupportedVersions {
     min: PythonVersion,
     max: PythonVersion,
@@ -106,7 +106,7 @@ fn ensure_python_version(interpreter_config: &InterpreterConfig) -> Result<()> {
                 if interpreter_config.is_free_threaded() {
                     warn!(
                             "The free-threaded build of CPython does not yet support abi3 so the build artifacts will be version-specific."
-                    )
+                    );
                 }
             }
             PythonImplementation::PyPy => warn!(
@@ -179,7 +179,7 @@ fn emit_link_config(build_config: &BuildConfig) -> Result<()> {
     Ok(())
 }
 
-/// Prepares the PyO3 crate for compilation.
+/// Prepares the `PyO3` crate for compilation.
 ///
 /// This loads the config from pyo3-build-config and then makes some additional checks to improve UX
 /// for users.
@@ -208,7 +208,7 @@ fn configure_pyo3() -> Result<()> {
     }
 
     for cfg in interpreter_config.build_script_outputs() {
-        println!("{cfg}")
+        println!("{cfg}");
     }
 
     // Extra lines come last, to support last write wins.
