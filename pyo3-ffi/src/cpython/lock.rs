@@ -11,6 +11,7 @@ pub struct PyMutex {
 // we don't impl Default because PyO3's safe wrappers don't need it
 #[allow(clippy::new_without_default)]
 impl PyMutex {
+    #[must_use]
     pub const fn new() -> PyMutex {
         PyMutex {
             _bits: AtomicU8::new(0),
