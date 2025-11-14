@@ -79,6 +79,18 @@ impl PyImplOptions {
     }
 }
 
+/// Build the methods for a #[pymethods] impl block.
+///
+/// This function generates `TokenStream` code for methods found in the given impl block. It
+/// performs several validations and may return a `syn::Error` on invalid inputs.
+///
+/// # Errors
+///
+/// This returns an error if:
+/// - The impl block implements a trait (#[pymethods] is not allowed on trait impls)
+/// - The impl block has generics or lifetime parameters
+/// - The impl block's attributes or contained functions/constants have invalid attributes
+/// - Any internal parsing or code generation step fails (e.g. from the underlying `syn` APIs)
 pub fn build_py_methods(
     ast: &mut syn::ItemImpl,
     methods_type: PyClassMethodsType,
@@ -93,7 +105,7 @@ pub fn build_py_methods(
         );
     }
     let options = PyImplOptions::from_attrs(&mut ast.attrs)?;
-    impl_methods(&ast.self_ty, &mut ast.items, methods_type, options)
+    impl_methods(&ast.self_ty, &mut ast.items, methods_type, &options)
 }
 
 fn check_pyfunction(pyo3_path: &PyO3CratePath, meth: &mut ImplItemFn) -> syn::Result<()> {
@@ -103,8 +115,8 @@ fn check_pyfunction(pyo3_path: &PyO3CratePath, meth: &mut ImplItemFn) -> syn::Re
         let attrs = [attr.clone()];
 
         if has_attribute(&attrs, "pyfunction")
-            || has_attribute_with_namespace(&attrs, Some(pyo3_path),  &["pyfunction"])
-            || has_attribute_with_namespace(&attrs, Some(pyo3_path),  &["prelude", "pyfunction"]) {
+            || has_attribute_with_namespace(&attrs, Some(pyo3_path.clone()),  &["pyfunction"])
+            || has_attribute_with_namespace(&attrs, Some(pyo3_path.clone()),  &["prelude", "pyfunction"]) {
                 error = Some(err_spanned!(meth.sig.span() => "functions inside #[pymethods] do not need to be annotated with #[pyfunction]"));
                 false
         } else {
@@ -119,7 +131,7 @@ pub fn impl_methods(
     ty: &syn::Type,
     impls: &mut [syn::ImplItem],
     methods_type: PyClassMethodsType,
-    options: PyImplOptions,
+    options: &PyImplOptions,
 ) -> syn::Result<TokenStream> {
     let mut extra_fragments = Vec::new();
     let mut proto_impls = Vec::new();
@@ -133,7 +145,7 @@ pub fn impl_methods(
         .map(|iimpl| {
             match iimpl {
                 syn::ImplItem::Fn(meth) => {
-                    let ctx = &Ctx::new(&options.krate, Some(&meth.sig));
+                    let ctx = &Ctx::new(options.krate.as_ref(), Some(&meth.sig));
                     let mut fun_options = PyFunctionOptions::from_attrs(&mut meth.attrs)?;
                     fun_options.krate = fun_options.krate.or_else(|| options.krate.clone());
 
@@ -166,7 +178,7 @@ pub fn impl_methods(
                     }
                 }
                 syn::ImplItem::Const(konst) => {
-                    let ctx = &Ctx::new(&options.krate, None);
+                    let ctx = &Ctx::new(options.krate.as_ref(), None);
                     let attributes = ConstAttributes::from_attrs(&mut konst.attrs)?;
                     if attributes.is_class_attr {
                         let spec = ConstSpec {
@@ -209,13 +221,13 @@ pub fn impl_methods(
         })
         .try_combine_syn_errors()?;
 
-    let ctx = &Ctx::new(&options.krate, None);
+    let ctx = &Ctx::new(options.krate.as_ref(), None);
 
     add_shared_proto_slots(ty, &mut proto_impls, implemented_proto_fragments, ctx);
 
     let items = match methods_type {
-        PyClassMethodsType::Specialization => impl_py_methods(ty, methods, proto_impls, ctx),
-        PyClassMethodsType::Inventory => submit_methods_inventory(ty, methods, proto_impls, ctx),
+        PyClassMethodsType::Specialization => impl_py_methods(ty, &methods, &proto_impls, ctx),
+        PyClassMethodsType::Inventory => submit_methods_inventory(ty, &methods, &proto_impls, ctx),
     };
 
     Ok(quote! {
@@ -260,8 +272,8 @@ pub fn gen_py_const(cls: &syn::Type, spec: &ConstSpec, ctx: &Ctx) -> MethodAndMe
 
 fn impl_py_methods(
     ty: &syn::Type,
-    methods: Vec<TokenStream>,
-    proto_impls: Vec<TokenStream>,
+    methods: &Vec<TokenStream>,
+    proto_impls: &Vec<TokenStream>,
     ctx: &Ctx,
 ) -> TokenStream {
     let Ctx { pyo3_path, .. } = ctx;
@@ -341,8 +353,8 @@ fn add_shared_proto_slots(
 
 fn submit_methods_inventory(
     ty: &syn::Type,
-    methods: Vec<TokenStream>,
-    proto_impls: Vec<TokenStream>,
+    methods: &Vec<TokenStream>,
+    proto_impls: &Vec<TokenStream>,
     ctx: &Ctx,
 ) -> TokenStream {
     let Ctx { pyo3_path, .. } = ctx;
