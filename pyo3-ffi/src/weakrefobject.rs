@@ -1,4 +1,4 @@
-use crate::object::{PyTypeObject, PyObject, PyObject_TypeCheck, Py_TYPE};
+use crate::object::{PyObject, PyObject_TypeCheck, PyTypeObject, Py_TYPE};
 use std::ffi::c_int;
 #[cfg(not(PyPy))]
 use std::ptr::addr_of_mut;
