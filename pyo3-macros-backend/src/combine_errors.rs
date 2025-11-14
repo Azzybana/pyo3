@@ -21,7 +21,9 @@ where
         }
 
         let mut err_iter = errors.into_iter();
-        let Some(mut err) = err_iter.next() else { return Ok(oks); };
+        let Some(mut err) = err_iter.next() else {
+            return Ok(oks);
+        };
 
         for e in err_iter {
             err.combine(e);
