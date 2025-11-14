@@ -20,13 +20,13 @@ extern "C" {
 
 #[inline]
 pub unsafe fn PyFrame_Check(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == addr_of_mut!(PyFrame_Type)) as c_int
+    c_int::from(Py_TYPE(op) == addr_of_mut!(PyFrame_Type))
 }
 
 #[cfg(Py_3_13)]
 #[inline]
 pub unsafe fn PyFrameLocalsProxy_Check(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == addr_of_mut!(PyFrameLocalsProxy_Type)) as c_int
+    c_int::from(Py_TYPE(op) == addr_of_mut!(PyFrameLocalsProxy_Type))
 }
 
 extern "C" {
