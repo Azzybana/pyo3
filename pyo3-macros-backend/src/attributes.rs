@@ -112,7 +112,9 @@ fn parse_shorthand_format(fmt: &LitStr) -> Result<(LitStr, Vec<Member>)> {
             tracker += 2;
             continue;
         }
-        let Some(next) = read.chars().next() else { break };
+        let Some(next) = read.chars().next() else {
+            break;
+        };
         tracker += 1;
         let member = match next {
             '0'..='9' => {

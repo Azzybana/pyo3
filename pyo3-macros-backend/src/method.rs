@@ -780,7 +780,10 @@ impl<'a> FnSpec<'a> {
             // but *not* of the call itself otherwise the spans get really weird
             let ret_ident = Ident::new("ret", *output_span);
             let ret_expr = quote! { let #ret_ident = #call; };
-            let return_conversion = quotes::map_result_into_ptr(&quotes::ok_wrap(&ret_ident.to_token_stream(), ctx), ctx);
+            let return_conversion = quotes::map_result_into_ptr(
+                &quotes::ok_wrap(&ret_ident.to_token_stream(), ctx),
+                ctx,
+            );
             quote! {
                 {
                     #ret_expr
