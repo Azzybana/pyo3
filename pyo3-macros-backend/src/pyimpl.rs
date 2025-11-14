@@ -85,15 +85,15 @@ pub fn build_py_methods(
 ) -> syn::Result<TokenStream> {
     if let Some((_, path, _)) = &ast.trait_ {
         bail_spanned!(path.span() => "#[pymethods] cannot be used on trait impl blocks");
-    } else if ast.generics != syn::Generics::default() {
+    }
+    if ast.generics != syn::Generics::default() {
         bail_spanned!(
             ast.generics.span() =>
             "#[pymethods] cannot be used with lifetime parameters or generics"
         );
-    } else {
-        let options = PyImplOptions::from_attrs(&mut ast.attrs)?;
-        impl_methods(&ast.self_ty, &mut ast.items, methods_type, options)
     }
+    let options = PyImplOptions::from_attrs(&mut ast.attrs)?;
+    impl_methods(&ast.self_ty, &mut ast.items, methods_type, options)
 }
 
 fn check_pyfunction(pyo3_path: &PyO3CratePath, meth: &mut ImplItemFn) -> syn::Result<()> {
