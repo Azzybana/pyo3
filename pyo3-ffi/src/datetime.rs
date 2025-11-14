@@ -1,6 +1,6 @@
 //! FFI bindings to the functions and structs defined in `datetime.h`
 //!
-//! This is the unsafe thin  wrapper around the [CPython C API](https://docs.python.org/3/c-api/datetime.html),
+//! This is the unsafe thin  wrapper around the [``CPython`` C API](https://docs.python.org/3/c-api/datetime.html),
 //! and covers the various date and time related objects in the Python `datetime`
 //! standard library module.
 
@@ -62,7 +62,7 @@ pub struct PyDateTime_Time {
     /// # Safety
     ///
     /// Care should be taken when reading this field. If the time does not have a
-    /// tzinfo then CPython may allocate as a `_PyDateTime_BaseTime` without this field.
+    /// tzinfo then `CPython` may allocate as a `_PyDateTime_BaseTime` without this field.
     pub tzinfo: *mut PyObject,
 }
 
@@ -105,7 +105,7 @@ pub struct PyDateTime_DateTime {
     /// # Safety
     ///
     /// Care should be taken when reading this field. If the time does not have a
-    /// tzinfo then CPython may allocate as a `_PyDateTime_BaseDateTime` without this field.
+    /// tzinfo then `CPython` may allocate as a `_PyDateTime_BaseDateTime` without this field.
     pub tzinfo: *mut PyObject,
 }
 
@@ -118,7 +118,7 @@ pub struct PyDateTime_DateTime {
 /// Returns a signed integer greater than 0.
 pub unsafe fn PyDateTime_GET_YEAR(o: *mut PyObject) -> c_int {
     // This should work for Date or DateTime
-    let data = (*(o as *mut PyDateTime_Date)).data;
+    let data = (*o.cast::<PyDateTime_Date>()).data;
     (c_int::from(data[0]) << 8) | c_int::from(data[1])
 }
 
@@ -127,7 +127,7 @@ pub unsafe fn PyDateTime_GET_YEAR(o: *mut PyObject) -> c_int {
 /// Retrieve the month component of a `PyDateTime_Date` or `PyDateTime_DateTime`.
 /// Returns a signed integer in the range `[1, 12]`.
 pub unsafe fn PyDateTime_GET_MONTH(o: *mut PyObject) -> c_int {
-    let data = (*(o as *mut PyDateTime_Date)).data;
+    let data = (*o.cast::<PyDateTime_Date>()).data;
     c_int::from(data[2])
 }
 
@@ -136,7 +136,7 @@ pub unsafe fn PyDateTime_GET_MONTH(o: *mut PyObject) -> c_int {
 /// Retrieve the day component of a `PyDateTime_Date` or `PyDateTime_DateTime`.
 /// Returns a signed integer in the interval `[1, 31]`.
 pub unsafe fn PyDateTime_GET_DAY(o: *mut PyObject) -> c_int {
-    let data = (*(o as *mut PyDateTime_Date)).data;
+    let data = (*o.cast::<PyDateTime_Date>()).data;
     c_int::from(data[3])
 }
 
@@ -195,7 +195,7 @@ macro_rules! _PyDateTime_GET_TZINFO {
 /// Retrieve the hour component of a `PyDateTime_DateTime`.
 /// Returns a signed integer in the interval `[0, 23]`
 pub unsafe fn PyDateTime_DATE_GET_HOUR(o: *mut PyObject) -> c_int {
-    _PyDateTime_GET_HOUR!((o as *mut PyDateTime_DateTime), _PyDateTime_DATE_DATASIZE)
+    _PyDateTime_GET_HOUR!(o.cast::<PyDateTime_DateTime>(), _PyDateTime_DATE_DATASIZE)
 }
 
 #[inline]
@@ -203,7 +203,7 @@ pub unsafe fn PyDateTime_DATE_GET_HOUR(o: *mut PyObject) -> c_int {
 /// Retrieve the minute component of a `PyDateTime_DateTime`.
 /// Returns a signed integer in the interval `[0, 59]`
 pub unsafe fn PyDateTime_DATE_GET_MINUTE(o: *mut PyObject) -> c_int {
-    _PyDateTime_GET_MINUTE!((o as *mut PyDateTime_DateTime), _PyDateTime_DATE_DATASIZE)
+    _PyDateTime_GET_MINUTE!(o.cast::<PyDateTime_DateTime>(), _PyDateTime_DATE_DATASIZE)
 }
 
 #[inline]
@@ -211,7 +211,7 @@ pub unsafe fn PyDateTime_DATE_GET_MINUTE(o: *mut PyObject) -> c_int {
 /// Retrieve the second component of a `PyDateTime_DateTime`.
 /// Returns a signed integer in the interval `[0, 59]`
 pub unsafe fn PyDateTime_DATE_GET_SECOND(o: *mut PyObject) -> c_int {
-    _PyDateTime_GET_SECOND!((o as *mut PyDateTime_DateTime), _PyDateTime_DATE_DATASIZE)
+    _PyDateTime_GET_SECOND!(o.cast::<PyDateTime_DateTime>(), _PyDateTime_DATE_DATASIZE)
 }
 
 #[inline]
@@ -219,7 +219,7 @@ pub unsafe fn PyDateTime_DATE_GET_SECOND(o: *mut PyObject) -> c_int {
 /// Retrieve the microsecond component of a `PyDateTime_DateTime`.
 /// Returns a signed integer in the interval `[0, 999999]`
 pub unsafe fn PyDateTime_DATE_GET_MICROSECOND(o: *mut PyObject) -> c_int {
-    _PyDateTime_GET_MICROSECOND!((o as *mut PyDateTime_DateTime), _PyDateTime_DATE_DATASIZE)
+    _PyDateTime_GET_MICROSECOND!(o.cast::<PyDateTime_DateTime>(), _PyDateTime_DATE_DATASIZE)
 }
 
 #[inline]
@@ -227,7 +227,7 @@ pub unsafe fn PyDateTime_DATE_GET_MICROSECOND(o: *mut PyObject) -> c_int {
 /// Retrieve the fold component of a `PyDateTime_DateTime`.
 /// Returns a signed integer in the interval `[0, 1]`
 pub unsafe fn PyDateTime_DATE_GET_FOLD(o: *mut PyObject) -> c_uchar {
-    _PyDateTime_GET_FOLD!(o as *mut PyDateTime_DateTime)
+    _PyDateTime_GET_FOLD!(o.cast::<PyDateTime_DateTime>())
 }
 
 #[inline]
@@ -236,7 +236,7 @@ pub unsafe fn PyDateTime_DATE_GET_FOLD(o: *mut PyObject) -> c_uchar {
 /// Returns a pointer to a `PyObject` that should be either NULL or an instance
 /// of a `datetime.tzinfo` subclass.
 pub unsafe fn PyDateTime_DATE_GET_TZINFO(o: *mut PyObject) -> *mut PyObject {
-    _PyDateTime_GET_TZINFO!(o as *mut PyDateTime_DateTime)
+    _PyDateTime_GET_TZINFO!(o.cast::<PyDateTime_DateTime>())
 }
 
 // Accessor functions for Time
@@ -245,7 +245,7 @@ pub unsafe fn PyDateTime_DATE_GET_TZINFO(o: *mut PyObject) -> *mut PyObject {
 /// Retrieve the hour component of a `PyDateTime_Time`.
 /// Returns a signed integer in the interval `[0, 23]`
 pub unsafe fn PyDateTime_TIME_GET_HOUR(o: *mut PyObject) -> c_int {
-    _PyDateTime_GET_HOUR!((o as *mut PyDateTime_Time), 0)
+    _PyDateTime_GET_HOUR!(o.cast::<PyDateTime_Time>(), 0)
 }
 
 #[inline]
@@ -253,7 +253,7 @@ pub unsafe fn PyDateTime_TIME_GET_HOUR(o: *mut PyObject) -> c_int {
 /// Retrieve the minute component of a `PyDateTime_Time`.
 /// Returns a signed integer in the interval `[0, 59]`
 pub unsafe fn PyDateTime_TIME_GET_MINUTE(o: *mut PyObject) -> c_int {
-    _PyDateTime_GET_MINUTE!((o as *mut PyDateTime_Time), 0)
+    _PyDateTime_GET_MINUTE!(o.cast::<PyDateTime_Time>(), 0)
 }
 
 #[inline]
@@ -261,7 +261,7 @@ pub unsafe fn PyDateTime_TIME_GET_MINUTE(o: *mut PyObject) -> c_int {
 /// Retrieve the second component of a `PyDateTime_DateTime`.
 /// Returns a signed integer in the interval `[0, 59]`
 pub unsafe fn PyDateTime_TIME_GET_SECOND(o: *mut PyObject) -> c_int {
-    _PyDateTime_GET_SECOND!((o as *mut PyDateTime_Time), 0)
+    _PyDateTime_GET_SECOND!(o.cast::<PyDateTime_Time>(), 0)
 }
 
 #[inline]
@@ -269,7 +269,7 @@ pub unsafe fn PyDateTime_TIME_GET_SECOND(o: *mut PyObject) -> c_int {
 /// Retrieve the microsecond component of a `PyDateTime_DateTime`.
 /// Returns a signed integer in the interval `[0, 999999]`
 pub unsafe fn PyDateTime_TIME_GET_MICROSECOND(o: *mut PyObject) -> c_int {
-    _PyDateTime_GET_MICROSECOND!((o as *mut PyDateTime_Time), 0)
+    _PyDateTime_GET_MICROSECOND!(o.cast::<PyDateTime_Time>(), 0)
 }
 
 #[cfg(not(any(PyPy, GraalPy)))]
@@ -277,7 +277,7 @@ pub unsafe fn PyDateTime_TIME_GET_MICROSECOND(o: *mut PyObject) -> c_int {
 /// Retrieve the fold component of a `PyDateTime_Time`.
 /// Returns a signed integer in the interval `[0, 1]`
 pub unsafe fn PyDateTime_TIME_GET_FOLD(o: *mut PyObject) -> c_uchar {
-    _PyDateTime_GET_FOLD!(o as *mut PyDateTime_Time)
+    _PyDateTime_GET_FOLD!(o.cast::<PyDateTime_Time>())
 }
 
 #[inline]
@@ -286,14 +286,14 @@ pub unsafe fn PyDateTime_TIME_GET_FOLD(o: *mut PyObject) -> c_uchar {
 /// Returns a pointer to a `PyObject` that should be either NULL or an instance
 /// of a `datetime.tzinfo` subclass.
 pub unsafe fn PyDateTime_TIME_GET_TZINFO(o: *mut PyObject) -> *mut PyObject {
-    _PyDateTime_GET_TZINFO!(o as *mut PyDateTime_Time)
+    _PyDateTime_GET_TZINFO!(o.cast::<PyDateTime_Time>())
 }
 
 // Accessor functions
 #[cfg(not(any(PyPy, GraalPy)))]
 macro_rules! _access_field {
     ($obj:expr, $type: ident, $field:ident) => {
-        (*($obj as *mut $type)).$field
+        (*$obj.cast::<$type>()).$field
     };
 }
 
@@ -597,6 +597,7 @@ pub const PyDateTime_CAPSULE_NAME: &CStr = c"datetime.datetime_CAPI";
 /// # Note
 /// This function will return a null pointer until
 /// `PyDateTime_IMPORT` is called
+#[must_use]
 #[inline]
 pub unsafe fn PyDateTimeAPI() -> *mut PyDateTime_CAPI {
     *PyDateTimeAPI_impl.ptr.get()
@@ -612,7 +613,7 @@ pub unsafe fn PyDateTime_IMPORT() {
 
         #[cfg(not(PyPy))]
         let py_datetime_c_api =
-            PyCapsule_Import(PyDateTime_CAPSULE_NAME.as_ptr(), 1) as *mut PyDateTime_CAPI;
+            PyCapsule_Import(PyDateTime_CAPSULE_NAME.as_ptr(), 1).cast::<PyDateTime_CAPI>();
 
         if py_datetime_c_api.is_null() {
             return;
@@ -628,6 +629,7 @@ pub unsafe fn PyDateTime_IMPORT() {
 }
 
 #[inline]
+#[must_use]
 pub unsafe fn PyDateTime_TimeZone_UTC() -> *mut PyObject {
     (*PyDateTimeAPI()).TimeZone_UTC
 }
@@ -646,7 +648,7 @@ pub unsafe fn PyDate_Check(op: *mut PyObject) -> c_int {
 #[inline]
 /// Check if `op`'s type is exactly `PyDateTimeAPI.DateType`.
 pub unsafe fn PyDate_CheckExact(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == (*PyDateTimeAPI()).DateType) as c_int
+    c_int::from(Py_TYPE(op) == (*PyDateTimeAPI()).DateType)
 }
 
 #[inline]
@@ -658,7 +660,7 @@ pub unsafe fn PyDateTime_Check(op: *mut PyObject) -> c_int {
 #[inline]
 /// Check if `op`'s type is exactly `PyDateTimeAPI.DateTimeType`.
 pub unsafe fn PyDateTime_CheckExact(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == (*PyDateTimeAPI()).DateTimeType) as c_int
+    c_int::from(Py_TYPE(op) == (*PyDateTimeAPI()).DateTimeType)
 }
 
 #[inline]
@@ -670,7 +672,7 @@ pub unsafe fn PyTime_Check(op: *mut PyObject) -> c_int {
 #[inline]
 /// Check if `op`'s type is exactly `PyDateTimeAPI.TimeType`.
 pub unsafe fn PyTime_CheckExact(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == (*PyDateTimeAPI()).TimeType) as c_int
+    c_int::from(Py_TYPE(op) == (*PyDateTimeAPI()).TimeType)
 }
 
 #[inline]
@@ -682,7 +684,7 @@ pub unsafe fn PyDelta_Check(op: *mut PyObject) -> c_int {
 #[inline]
 /// Check if `op`'s type is exactly `PyDateTimeAPI.DeltaType`.
 pub unsafe fn PyDelta_CheckExact(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == (*PyDateTimeAPI()).DeltaType) as c_int
+    c_int::from(Py_TYPE(op) == (*PyDateTimeAPI()).DeltaType)
 }
 
 #[inline]
@@ -694,7 +696,7 @@ pub unsafe fn PyTZInfo_Check(op: *mut PyObject) -> c_int {
 #[inline]
 /// Check if `op`'s type is exactly `PyDateTimeAPI.TZInfoType`.
 pub unsafe fn PyTZInfo_CheckExact(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == (*PyDateTimeAPI()).TZInfoType) as c_int
+    c_int::from(Py_TYPE(op) == (*PyDateTimeAPI()).TZInfoType)
 }
 
 // skipped non-limited PyDate_FromDate
