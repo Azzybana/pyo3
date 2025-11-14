@@ -1,5 +1,5 @@
 use crate::methodobject::PyMethodDef;
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, PyObject_TypeCheck, Py_TYPE, PyObject_HEAD_INIT, traverseproc, inquiry, freefunc};
 use crate::pyport::Py_ssize_t;
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr::addr_of_mut;
@@ -17,7 +17,7 @@ pub unsafe fn PyModule_Check(op: *mut PyObject) -> c_int {
 
 #[inline]
 pub unsafe fn PyModule_CheckExact(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == addr_of_mut!(PyModule_Type)) as c_int
+    c_int::from(Py_TYPE(op) == addr_of_mut!(PyModule_Type))
 }
 
 extern "C" {
