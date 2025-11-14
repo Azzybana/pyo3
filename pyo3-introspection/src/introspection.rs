@@ -138,7 +138,12 @@ fn convert_members<'a>(
                 parent: _,
                 decorators,
                 returns,
-            } => functions.push(convert_function(name, arguments, decorators, returns.as_ref())?),
+            } => functions.push(convert_function(
+                name,
+                arguments,
+                decorators,
+                returns.as_ref(),
+            )?),
             Chunk::Attribute {
                 name,
                 id: _,
