@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, PyType_FastSubclass, Py_TPFLAGS_UNICODE_SUBCLASS, Py_TYPE};
 use crate::pyport::Py_ssize_t;
 use libc::wchar_t;
 use std::ffi::{c_char, c_int, c_void};
@@ -39,6 +39,7 @@ pub unsafe fn PyUnicode_Check(op: *mut PyObject) -> c_int {
 
 #[inline]
 #[cfg(not(PyPy))]
+#[allow(clippy::cast_lossless)]
 pub unsafe fn PyUnicode_CheckExact(op: *mut PyObject) -> c_int {
     (Py_TYPE(op) == addr_of_mut!(PyUnicode_Type)) as c_int
 }
