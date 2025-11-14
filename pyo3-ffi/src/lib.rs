@@ -1,14 +1,14 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 //! Raw FFI declarations for Python's C API.
 //!
-//! PyO3 can be used to write native Python modules or run Python code and modules from Rust.
+//! `PyO3` can be used to write native Python modules or run Python code and modules from Rust.
 //!
 //! This crate just provides low level bindings to the Python interpreter.
-//! It is meant for advanced users only - regular PyO3 users shouldn't
+//! It is meant for advanced users only - regular `PyO3` users shouldn't
 //! need to interact with this crate at all.
 //!
 //! The contents of this crate are not documented here, as it would entail
-//! basically copying the documentation from CPython. Consult the [Python/C API Reference
+//! basically copying the documentation from `CPython`. Consult the [Python/C API Reference
 //! Manual][capi] for up-to-date documentation.
 //!
 //! # Safety
@@ -25,14 +25,14 @@
 //!
 //! # Feature flags
 //!
-//! PyO3 uses [feature flags] to enable you to opt-in to additional functionality. For a detailed
+//! `PyO3` uses [feature flags] to enable you to opt-in to additional functionality. For a detailed
 //! description, see the [Features chapter of the guide].
 //!
 //! ## Optional feature flags
 //!
-//! The following features customize PyO3's behavior:
+//! The following features customize `PyO3`'s behavior:
 //!
-//! - `abi3`: Restricts PyO3's API to a subset of the full Python API which is guaranteed by
+//! - `abi3`: Restricts `PyO3`'s API to a subset of the full Python API which is guaranteed by
 //! [PEP 384] to be forward-compatible with future Python versions.
 //! - `extension-module`: This will tell the linker to keep the Python symbols unresolved, so that
 //! your module can also be used with statically linked Python interpreters. Use this feature when
@@ -40,15 +40,15 @@
 //!
 //! ## `rustc` environment flags
 //!
-//! PyO3 uses `rustc`'s `--cfg` flags to enable or disable code used for different Python versions.
+//! `PyO3` uses `rustc`'s `--cfg` flags to enable or disable code used for different Python versions.
 //! If you want to do this for your own crate, you can do so with the [`pyo3-build-config`] crate.
 //!
 //! - `Py_3_7`, `Py_3_8`, `Py_3_9`, `Py_3_10`, `Py_3_11`, `Py_3_12`, `Py_3_13`: Marks code that is
 //!    only enabled when compiling for a given minimum Python version.
 //! - `Py_LIMITED_API`: Marks code enabled when the `abi3` feature flag is enabled.
-//! - `Py_GIL_DISABLED`: Marks code that runs only in the free-threaded build of CPython.
-//! - `PyPy` - Marks code enabled when compiling for PyPy.
-//! - `GraalPy` - Marks code enabled when compiling for GraalPy.
+//! - `Py_GIL_DISABLED`: Marks code that runs only in the free-threaded build of `CPython`.
+//! - `PyPy` - Marks code enabled when compiling for `PyPy`.
+//! - `GraalPy` - Marks code enabled when compiling for `GraalPy`.
 //!
 //! Additionally, you can query for the values `Py_DEBUG`, `Py_REF_DEBUG`,
 //! `Py_TRACE_REFS`, and `COUNT_ALLOCS` from `py_sys_config` to query for the
@@ -80,13 +80,13 @@
 //! # Minimum supported Rust and Python versions
 //!
 //! `pyo3-ffi` supports the following Python distributions:
-//!   - CPython 3.7 or greater
-//!   - PyPy 7.3 (Python 3.11+)
-//!   - GraalPy 24.0 or greater (Python 3.10+)
+//!   - `CPython` 3.7 or greater
+//!   - `PyPy` 7.3 (Python 3.11+)
+//!   - `GraalPy` 24.0 or greater (Python 3.10+)
 //!
 //! # Example: Building Python Native modules
 //!
-//! PyO3 can be used to generate a native Python module. The easiest way to try this out for the
+//! `PyO3` can be used to generate a native Python module. The easiest way to try this out for the
 //! first time is to use [`maturin`]. `maturin` is a tool for building and publishing Rust-based
 //! Python packages with minimal configuration. The following steps set up some files for an example
 //! Python module, install `maturin`, and then show how to build and import the Python module.
@@ -290,7 +290,7 @@
 //! configuration.
 //!
 //! This example stores the module definition statically and uses the `PyModule_Create` function
-//! in the CPython C API to register the module. This is the "old" style for registering modules
+//! in the `CPython` C API to register the module. This is the "old" style for registering modules
 //! and has the limitation that it cannot support subinterpreters. You can also create a module
 //! using the new multi-phase initialization API that does support subinterpreters. See the
 //! `sequential` project located in the `examples` directory at the root of the `pyo3-ffi` crate
@@ -308,7 +308,7 @@
 //!
 //! While most projects use the safe wrapper provided by pyo3,
 //! you can take a look at the [`orjson`] library as an example on how to use `pyo3-ffi` directly.
-//! For those well versed in C and Rust the [tutorials] from the CPython documentation
+//! For those well versed in C and Rust the [tutorials] from the `CPython` documentation
 //! can be easily converted to rust as well.
 //!
 //! [tutorials]: https://docs.python.org/3/extending/
@@ -350,11 +350,11 @@ macro_rules! opaque_struct {
 
 /// This is a helper macro to create a `&'static CStr`.
 ///
-/// It can be used on all Rust versions supported by PyO3, unlike c"" literals which
+/// It can be used on all Rust versions supported by `PyO3`, unlike c"" literals which
 /// were stabilised in Rust 1.77.
 ///
-/// Due to the nature of PyO3 making heavy use of C FFI interop with Python, it is
-/// common for PyO3 to use CStr.
+/// Due to the nature of `PyO3` making heavy use of C FFI interop with Python, it is
+/// common for `PyO3` to use `CStr`.
 ///
 /// Examples:
 ///
@@ -374,6 +374,7 @@ macro_rules! c_str {
 
 /// Private helper for `c_str!` macro.
 #[doc(hidden)]
+#[must_use]
 pub const fn _cstr_from_utf8_with_nul_checked(s: &str) -> &std::ffi::CStr {
     match std::ffi::CStr::from_bytes_with_nul(s.as_bytes()) {
         Ok(cstr) => cstr,
