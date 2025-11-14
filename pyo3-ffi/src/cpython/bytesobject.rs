@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyVarObject, PyObject};
 use crate::Py_ssize_t;
 #[cfg(not(Py_LIMITED_API))]
 use std::ffi::c_char;
@@ -28,7 +28,7 @@ extern "C" {
 #[inline]
 pub unsafe fn PyBytes_AS_STRING(op: *mut PyObject) -> *const c_char {
     #[cfg(not(any(PyPy, GraalPy)))]
-    return &(*op.cast::<PyBytesObject>()).ob_sval as *const c_char;
+    return (*op.cast::<PyBytesObject>()).ob_sval.as_ptr();
     #[cfg(any(PyPy, GraalPy))]
     return crate::PyBytes_AsString(op);
 }
