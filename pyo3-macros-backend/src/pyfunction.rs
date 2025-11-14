@@ -170,7 +170,7 @@ impl<T: WarningFactory> WarningFactory for Vec<T> {
 
     fn span(&self) -> Span {
         self.iter()
-            .map(|val| val.span())
+            .map(WarningFactory::span)
             .reduce(|acc, span| acc.join(span).unwrap_or(acc))
             .unwrap()
     }
