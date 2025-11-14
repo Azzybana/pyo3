@@ -19,7 +19,7 @@ fn ensure_auto_initialize_ok(interpreter_config: &InterpreterConfig) -> Result<(
             For more information, see \
             https://pyo3.rs/v{pyo3_version}/\
                 building-and-distribution.html#embedding-python-in-rust",
-            pyo3_version = env::var("CARGO_PKG_VERSION").unwrap()
+            pyo3_version = env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "unknown".into())
         );
     }
     Ok(())
