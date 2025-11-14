@@ -60,15 +60,12 @@ pub mod kw {
 fn take_int(read: &mut &str, tracker: &mut usize) -> String {
     let mut int = String::new();
     for (i, ch) in read.char_indices() {
-        match ch {
-            '0'..='9' => {
-                *tracker += 1;
-                int.push(ch)
-            }
-            _ => {
-                *read = &read[i..];
-                break;
-            }
+        if ch.is_ascii_digit() {
+            *tracker += 1;
+            int.push(ch);
+        } else {
+            *read = &read[i..];
+            break;
         }
     }
     int
