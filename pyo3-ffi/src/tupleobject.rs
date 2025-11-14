@@ -1,4 +1,6 @@
-use crate::object::{PyTypeObject, PyObject, PyType_FastSubclass, Py_TPFLAGS_TUPLE_SUBCLASS, Py_TYPE};
+use crate::object::{
+    PyObject, PyTypeObject, PyType_FastSubclass, Py_TPFLAGS_TUPLE_SUBCLASS, Py_TYPE,
+};
 use crate::pyport::Py_ssize_t;
 use std::ffi::c_int;
 use std::ptr::addr_of_mut;
