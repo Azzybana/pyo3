@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyObject, PyType_Check, PyType_FastSubclass, Py_TYPE, Py_TPFLAGS_BASE_EXC_SUBCLASS, PyTypeObject};
 use crate::pyport::Py_ssize_t;
 use std::ffi::{c_char, c_int};
 
@@ -73,9 +73,10 @@ extern "C" {
 
 #[inline]
 pub unsafe fn PyExceptionClass_Check(x: *mut PyObject) -> c_int {
-    (PyType_Check(x) != 0
-        && PyType_FastSubclass(x as *mut PyTypeObject, Py_TPFLAGS_BASE_EXC_SUBCLASS) != 0)
-        as c_int
+    c_int::from(
+        PyType_Check(x) != 0
+            && PyType_FastSubclass(x.cast::<PyTypeObject>(), Py_TPFLAGS_BASE_EXC_SUBCLASS) != 0,
+    )
 }
 
 #[inline]
@@ -86,7 +87,7 @@ pub unsafe fn PyExceptionInstance_Check(x: *mut PyObject) -> c_int {
 #[inline]
 #[cfg(not(PyPy))]
 pub unsafe fn PyExceptionInstance_Class(x: *mut PyObject) -> *mut PyObject {
-    Py_TYPE(x) as *mut PyObject
+    Py_TYPE(x).cast::<PyObject>()
 }
 
 // ported from cpython exception.c (line 2096)
