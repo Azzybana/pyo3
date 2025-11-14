@@ -1,4 +1,4 @@
-use crate::object::{PyTypeObject, PyObject, Py_TYPE};
+use crate::object::{PyObject, PyTypeObject, Py_TYPE};
 use crate::pyport::Py_ssize_t;
 
 #[cfg(not(GraalPy))]
