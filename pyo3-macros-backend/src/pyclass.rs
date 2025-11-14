@@ -1557,7 +1557,7 @@ fn gen_complex_enum_variant_class_ident(enum_: &syn::Ident, variant: &syn::Ident
 #[cfg(feature = "experimental-inspect")]
 struct FunctionIntrospectionData<'a> {
     names: &'a [&'a str],
-    arguments: Vec<FnArg<'a>>,
+    arguments: Vec<FnArg>,
     returns: syn::Type,
 }
 
