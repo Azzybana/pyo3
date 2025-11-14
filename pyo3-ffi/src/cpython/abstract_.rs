@@ -46,7 +46,7 @@ const PY_VECTORCALL_ARGUMENTS_OFFSET: size_t =
     1 << (8 * std::mem::size_of::<size_t>() as size_t - 1);
 
 #[cfg(Py_3_8)]
-#[inline(always)]
+#[inline]
 #[must_use]
 /// Returns the number of arguments encoded in a vectorcall nargsf value.
 ///
@@ -61,7 +61,7 @@ pub unsafe fn PyVectorcall_NARGS(n: size_t) -> Py_ssize_t {
 }
 
 #[cfg(all(Py_3_8, not(PyPy)))]
-#[inline(always)]
+#[inline]
 /// Returns the vectorcall function pointer for `callable` if the callable's
 /// type supports vectorcall. Otherwise returns `None`.
 ///
@@ -85,7 +85,7 @@ pub unsafe fn PyVectorcall_Function(callable: *mut PyObject) -> Option<vectorcal
 }
 
 #[cfg(all(Py_3_8, not(PyPy)))]
-#[inline(always)]
+#[inline]
 /// # Panics
 ///
 /// This function will panic if any of the following conditions occur:
@@ -93,7 +93,7 @@ pub unsafe fn PyVectorcall_Function(callable: *mut PyObject) -> Option<vectorcal
 /// - `args` is null while the encoded number of arguments in `nargsf` is non-zero.
 /// - Any of the assertions in `PyVectorcall_Function` fail (e.g. `callable` is null,
 ///   or `callable` is not callable, or the type's `tp_vectorcall_offset` is not positive).
-pub unsafe fn _PyObject_VectorcallTstate(
+pub unsafe fn PyObject_VectorcallTstate(
     tstate: *mut PyThreadState,
     callable: *mut PyObject,
     args: *const *mut PyObject,
@@ -116,14 +116,14 @@ pub unsafe fn _PyObject_VectorcallTstate(
 }
 
 #[cfg(all(Py_3_8, not(any(PyPy, GraalPy, Py_3_11))))] // exported as a function from 3.11, see abstract.rs
-#[inline(always)]
+#[inline]
 pub unsafe fn PyObject_Vectorcall(
     callable: *mut PyObject,
     args: *const *mut PyObject,
     nargsf: size_t,
     kwnames: *mut PyObject,
 ) -> *mut PyObject {
-    _PyObject_VectorcallTstate(PyThreadState_GET(), callable, args, nargsf, kwnames)
+    PyObject_VectorcallTstate(PyThreadState_GET(), callable, args, nargsf, kwnames)
 }
 
 extern "C" {
@@ -152,30 +152,48 @@ extern "C" {
 }
 
 #[cfg(all(Py_3_8, not(any(PyPy, GraalPy))))]
-#[inline(always)]
+#[inline]
+/// # Panics
+///
+/// This function will panic if `nargs` is negative.
 pub unsafe fn _PyObject_FastCallTstate(
     tstate: *mut PyThreadState,
     func: *mut PyObject,
     args: *const *mut PyObject,
     nargs: Py_ssize_t,
 ) -> *mut PyObject {
-    _PyObject_VectorcallTstate(tstate, func, args, nargs as size_t, std::ptr::null_mut())
+    PyObject_VectorcallTstate(tstate, func, args, nargs.try_into().expect("nargs must be non-negative"), std::ptr::null_mut())
 }
 
 #[cfg(all(Py_3_8, not(any(PyPy, GraalPy))))]
-#[inline(always)]
+#[inline]
+/// # Panics
+///
+/// This function will panic if any of the following conditions occur:
+/// - `nargs` is negative (the conversion to `size_t` will fail).
+/// - Any of the assertions in `_PyObject_FastCallTstate` or
+///   `_PyObject_VectorcallTstate` fail. For example, this may happen if
+///   `func` is null, `func` is not callable, the callable's type does not
+///   support vectorcall but `tp_vectorcall_offset` is invalid, or if
+///   `args` is null while `nargs` is non-zero.
 pub unsafe fn _PyObject_FastCall(
     func: *mut PyObject,
     args: *const *mut PyObject,
     nargs: Py_ssize_t,
 ) -> *mut PyObject {
-    _PyObject_FastCallTstate(PyThreadState_GET(), func, args, nargs)
+
+    #[allow(clippy::used_underscore_items)]
+    let nargs_u: size_t = nargs
+        .try_into()
+        .expect("nargs must be non-negative for fastcall");
+    #[allow(clippy::used_underscore_items)]
+    _PyObject_FastCallTstate(PyThreadState_GET(), func, args, nargs_u.try_into().unwrap())
 }
 
 #[cfg(all(Py_3_8, not(PyPy)))]
-#[inline(always)]
+#[inline]
 pub unsafe fn _PyObject_CallNoArg(func: *mut PyObject) -> *mut PyObject {
-    _PyObject_VectorcallTstate(
+    PyObject_VectorcallTstate(
         PyThreadState_GET(),
         func,
         std::ptr::null_mut(),
@@ -191,32 +209,45 @@ extern "C" {
 }
 
 #[cfg(all(Py_3_8, not(PyPy)))]
-#[inline(always)]
+#[inline]
+/// # Panics
+///
+/// This function will panic if any of the following conditions occur:
+/// - `arg` is a null pointer.
+/// - any of the assertions in `PyVectorcall_Function` fail (for example, if
+///   `func` is null, or `func` is not callable, or the type's
+///   `tp_vectorcall_offset` is not positive).
 pub unsafe fn PyObject_CallOneArg(func: *mut PyObject, arg: *mut PyObject) -> *mut PyObject {
     assert!(!arg.is_null());
     let args_array = [std::ptr::null_mut(), arg];
     let args = args_array.as_ptr().offset(1); // For PY_VECTORCALL_ARGUMENTS_OFFSET
     let tstate = PyThreadState_GET();
     let nargsf = 1 | PY_VECTORCALL_ARGUMENTS_OFFSET;
-    _PyObject_VectorcallTstate(tstate, func, args, nargsf, std::ptr::null_mut())
+    PyObject_VectorcallTstate(tstate, func, args, nargsf, std::ptr::null_mut())
 }
 
 #[cfg(all(Py_3_9, not(PyPy)))]
-#[inline(always)]
+#[inline]
 pub unsafe fn PyObject_CallMethodNoArgs(
     self_: *mut PyObject,
     name: *mut PyObject,
 ) -> *mut PyObject {
     crate::PyObject_VectorcallMethod(
         name,
-        &self_,
+        &raw const self_,
         1 | PY_VECTORCALL_ARGUMENTS_OFFSET,
         std::ptr::null_mut(),
     )
 }
 
 #[cfg(all(Py_3_9, not(PyPy)))]
-#[inline(always)]
+#[inline]
+/// # Panics
+///
+/// This function will panic if any of the following conditions occur:
+/// - `arg` is a null pointer.
+/// - any of the assertions in `PyObject_VectorcallMethod` fail (for example, if
+///   `name` is null, or other preconditions of vectorcall are violated).
 pub unsafe fn PyObject_CallMethodOneArg(
     self_: *mut PyObject,
     name: *mut PyObject,
