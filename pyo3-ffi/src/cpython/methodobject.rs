@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, PyObject_TypeCheck, Py_TYPE};
 #[cfg(not(GraalPy))]
 use crate::{PyCFunctionObject, PyMethodDefPointer, METH_METHOD, METH_STATIC};
 use std::ffi::c_int;
@@ -17,7 +17,7 @@ extern "C" {
 
 #[inline]
 pub unsafe fn PyCMethod_CheckExact(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == addr_of_mut!(PyCMethod_Type)) as c_int
+    c_int::from(Py_TYPE(op) == addr_of_mut!(PyCMethod_Type))
 }
 
 #[inline]
