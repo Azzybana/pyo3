@@ -1,4 +1,7 @@
-use crate::object::{PyObject, PyType_Check, PyType_FastSubclass, Py_TYPE, Py_TPFLAGS_BASE_EXC_SUBCLASS, PyTypeObject};
+use crate::object::{
+    PyObject, PyTypeObject, PyType_Check, PyType_FastSubclass, Py_TPFLAGS_BASE_EXC_SUBCLASS,
+    Py_TYPE,
+};
 use crate::pyport::Py_ssize_t;
 use std::ffi::{c_char, c_int};
 
