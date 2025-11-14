@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyObject, PyTypeObject, Py_TYPE};
 use crate::pyport::Py_ssize_t;
 use std::ffi::c_int;
 use std::ptr::addr_of_mut;
@@ -42,7 +42,7 @@ extern "C" {
 
 #[inline]
 pub unsafe fn PySlice_Check(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == addr_of_mut!(PySlice_Type)) as c_int
+    c_int::from(Py_TYPE(op) == addr_of_mut!(PySlice_Type))
 }
 
 extern "C" {
@@ -50,7 +50,7 @@ extern "C" {
     pub fn PySlice_New(
         start: *mut PyObject,
         stop: *mut PyObject,
-        step: *mut PyObject,
+        step_obj: *mut PyObject,
     ) -> *mut PyObject;
 
     // skipped non-limited _PySlice_FromIndices
@@ -62,11 +62,12 @@ extern "C" {
         length: Py_ssize_t,
         start: *mut Py_ssize_t,
         stop: *mut Py_ssize_t,
-        step: *mut Py_ssize_t,
+        step_ptr: *mut Py_ssize_t,
     ) -> c_int;
 }
 
 #[inline]
+#[allow(clippy::similar_names)]
 pub unsafe fn PySlice_GetIndicesEx(
     slice: *mut PyObject,
     length: Py_ssize_t,
