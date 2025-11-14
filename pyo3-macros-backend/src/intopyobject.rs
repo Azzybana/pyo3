@@ -273,7 +273,7 @@ impl<'a, const REF: bool> Container<'a, REF> {
                                 .unwrap_or(name)
                                 .into_token_stream()
                         },
-                        |lit| quote::ToTokens::into_token_stream(lit),
+                        quote::ToTokens::into_token_stream,
                     );
                 let value = Ident::new(&format!("arg{i}"), f.field.ty.span());
 
@@ -497,9 +497,75 @@ fn verify_and_get_lifetime(generics: &syn::Generics) -> Option<&syn::LifetimePar
     lifetimes.find(|l| l.lifetime.ident == "py")
 }
 
+fn build_impl_body<const REF: bool>(
+    tokens: &DeriveInput,
+    options: &ContainerAttributes,
+    ctx: &Ctx,
+) -> Result<IntoPyObjectImpl> {
+    match &tokens.data {
+        syn::Data::Enum(en) => {
+            if options.transparent.is_some() {
+                bail_spanned!(tokens.span() => "`transparent` is not supported at top level for enums");
+            }
+            if let Some(rename_all) = &options.rename_all {
+                bail_spanned!(rename_all.span() => "`rename_all` is not supported at top level for enums");
+            }
+            let en = Enum::<REF>::new(en, &tokens.ident)?;
+            Ok(en.build(ctx))
+        }
+        syn::Data::Struct(st) => {
+            let ident = &tokens.ident;
+            let st = Container::<REF>::new(
+                Some(Ident::new("self", Span::call_site())),
+                &st.fields,
+                parse_quote!(#ident),
+                options.clone(),
+            )?;
+            Ok(st.build(ctx))
+        }
+        syn::Data::Union(_) => bail_spanned!(
+            tokens.span() => "#[derive(`IntoPyObject`)] is not supported for unions"
+        ),
+    }
+}
+
+fn determine_types(
+    types: IntoPyObjectTypes,
+    pyo3_path: &crate::utils::PyO3CratePath,
+    is_ref: bool,
+) -> (TokenStream, TokenStream, TokenStream) {
+    match types {
+        IntoPyObjectTypes::Transparent(ty) => {
+            if is_ref {
+                (
+                    quote! { <&'_a #ty as #pyo3_path::IntoPyObject<'py>>::Target },
+                    quote! { <&'_a #ty as #pyo3_path::IntoPyObject<'py>>::Output },
+                    quote! { <&'_a #ty as #pyo3_path::IntoPyObject<'py>>::Error },
+                )
+            } else {
+                (
+                    quote! { <#ty as #pyo3_path::IntoPyObject<'py>>::Target },
+                    quote! { <#ty as #pyo3_path::IntoPyObject<'py>>::Output },
+                    quote! { <#ty as #pyo3_path::IntoPyObject<'py>>::Error },
+                )
+            }
+        }
+        IntoPyObjectTypes::Opaque {
+            target,
+            output,
+            error,
+        } => (target, output, error),
+    }
+}
+
+/// Derive `IntoPyObject` for enums and structs.
+///
+/// # Errors
+///
+/// Returns an error if the derive attributes are invalid or if the type does not meet the requirements for derivation.
 pub fn build_derive_into_pyobject<const REF: bool>(tokens: &DeriveInput) -> Result<TokenStream> {
     let options = ContainerAttributes::from_attrs(&tokens.attrs)?;
-    let ctx = &Ctx::new(&options.krate, None);
+    let ctx = &Ctx::new(options.krate.as_ref(), None);
     let Ctx { pyo3_path, .. } = &ctx;
 
     let (_, ty_generics, _) = tokens.generics.split_for_impl();
@@ -522,57 +588,12 @@ pub fn build_derive_into_pyobject<const REF: bool>(tokens: &DeriveInput) -> Resu
             parse_quote!(&'_a #gen_ident: #pyo3_path::conversion::IntoPyObject<'py>)
         } else {
             parse_quote!(#gen_ident: #pyo3_path::conversion::IntoPyObject<'py>)
-        })
+        });
     }
 
-    let IntoPyObjectImpl { types, body } = match &tokens.data {
-        syn::Data::Enum(en) => {
-            if options.transparent.is_some() {
-                bail_spanned!(tokens.span() => "`transparent` is not supported at top level for enums");
-            }
-            if let Some(rename_all) = options.rename_all {
-                bail_spanned!(rename_all.span() => "`rename_all` is not supported at top level for enums");
-            }
-            let en = Enum::<REF>::new(en, &tokens.ident)?;
-            en.build(ctx)
-        }
-        syn::Data::Struct(st) => {
-            let ident = &tokens.ident;
-            let st = Container::<REF>::new(
-                Some(Ident::new("self", Span::call_site())),
-                &st.fields,
-                parse_quote!(#ident),
-                options.clone(),
-            )?;
-            st.build(ctx)
-        }
-        syn::Data::Union(_) => bail_spanned!(
-            tokens.span() => "#[derive(`IntoPyObject`)] is not supported for unions"
-        ),
-    };
+    let IntoPyObjectImpl { types, body } = build_impl_body::<REF>(tokens, &options, ctx)?;
 
-    let (target, output, error) = match types {
-        IntoPyObjectTypes::Transparent(ty) => {
-            if REF {
-                (
-                    quote! { <&'_a #ty as #pyo3_path::IntoPyObject<'py>>::Target },
-                    quote! { <&'_a #ty as #pyo3_path::IntoPyObject<'py>>::Output },
-                    quote! { <&'_a #ty as #pyo3_path::IntoPyObject<'py>>::Error },
-                )
-            } else {
-                (
-                    quote! { <#ty as #pyo3_path::IntoPyObject<'py>>::Target },
-                    quote! { <#ty as #pyo3_path::IntoPyObject<'py>>::Output },
-                    quote! { <#ty as #pyo3_path::IntoPyObject<'py>>::Error },
-                )
-            }
-        }
-        IntoPyObjectTypes::Opaque {
-            target,
-            output,
-            error,
-        } => (target, output, error),
-    };
+    let (target, output, error) = determine_types(types, pyo3_path, REF);
 
     let ident = &tokens.ident;
     let ident = if REF {
