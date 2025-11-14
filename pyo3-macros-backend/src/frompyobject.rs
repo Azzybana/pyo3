@@ -292,10 +292,10 @@ impl<'a> Container<'a> {
     fn build(&self, ctx: &Ctx) -> TokenStream {
         match &self.ty {
             ContainerType::StructNewtype(ident, from_py_with, _) => {
-                self.build_newtype_struct(Some(ident), from_py_with, ctx)
+                self.build_newtype_struct(Some(ident), from_py_with.as_ref(), ctx)
             }
             ContainerType::TupleNewtype(from_py_with, _) => {
-                self.build_newtype_struct(None, from_py_with, ctx)
+                self.build_newtype_struct(None, from_py_with.as_ref(), ctx)
             }
             ContainerType::Tuple(tups) => self.build_tuple_struct(tups, ctx),
             ContainerType::Struct(tups) => self.build_struct(tups, ctx),
@@ -305,7 +305,7 @@ impl<'a> Container<'a> {
     fn build_newtype_struct(
         &self,
         field_ident: Option<&Ident>,
-        from_py_with: &Option<FromPyWithAttribute>,
+        from_py_with: Option<&FromPyWithAttribute>,
         ctx: &Ctx,
     ) -> TokenStream {
         let Ctx { pyo3_path, .. } = ctx;
@@ -313,14 +313,11 @@ impl<'a> Container<'a> {
         let struct_name = self.name();
         if let Some(ident) = field_ident {
             let field_name = ident.to_string();
-            if let Some(FromPyWithAttribute {
-                kw,
-                value: expr_path,
-            }) = from_py_with
+            if let Some(from) = from_py_with
             {
-                let extractor = quote_spanned! { kw.span =>
-                    { let from_py_with: fn(_) -> _ = #expr_path; from_py_with }
-                };
+                    let extractor = quote_spanned! { from.kw.span =>
+                        { let from_py_with: fn(_) -> _ = #from.value; from_py_with }
+                    };
                 quote! {
                     Ok(#self_ty {
                         #ident: #pyo3_path::impl_::frompyobject::extract_struct_field_with(#extractor, obj, #struct_name, #field_name)?
@@ -333,13 +330,10 @@ impl<'a> Container<'a> {
                     })
                 }
             }
-        } else if let Some(FromPyWithAttribute {
-            kw,
-            value: expr_path,
-        }) = from_py_with
+        } else if let Some(from) = from_py_with
         {
-            let extractor = quote_spanned! { kw.span =>
-                { let from_py_with: fn(_) -> _ = #expr_path; from_py_with }
+            let extractor = quote_spanned! { from.kw.span =>
+                { let from_py_with: fn(_) -> _ = #from.value; from_py_with }
             };
             quote! {
                 #pyo3_path::impl_::frompyobject::extract_tuple_struct_field_with(#extractor, obj, #struct_name, 0).map(#self_ty)
@@ -481,7 +475,7 @@ impl<'a> Container<'a> {
 
     #[cfg(feature = "experimental-inspect")]
     fn field_input_type(
-        from_py_with: &Option<FromPyWithAttribute>,
+        from_py_with: Option<&FromPyWithAttribute>,
         ty: &syn::Type,
         ctx: &Ctx,
     ) -> TokenStream {
@@ -507,7 +501,7 @@ fn verify_and_get_lifetime(generics: &syn::Generics) -> Result<Option<&syn::Life
     Ok(lifetime)
 }
 
-/// Derive FromPyObject for enums and structs.
+/// Derive `FromPyObject` for enums and structs.
 ///
 ///   * Max 1 lifetime specifier, will be tied to `FromPyObject`'s specifier
 ///   * At least one field, in case of `#[transparent]`, exactly one field
