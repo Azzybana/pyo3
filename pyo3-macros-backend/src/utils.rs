@@ -24,13 +24,13 @@ macro_rules! bail_spanned {
 /// specified condition is not met.
 macro_rules! ensure_spanned {
     ($condition:expr, $span:expr => $msg:expr) => {
-        if !($condition) {
+        if !$condition {
             bail_spanned!($span => $msg);
         }
     };
     ($($condition:expr, $span:expr => $msg:expr;)*) => {
         if let Some(e) = [$(
-            (!($condition)).then(|| err_spanned!($span => $msg)),
+            (!$condition).then(|| err_spanned!($span => $msg)),
         )*]
             .into_iter()
             .flatten()
@@ -50,8 +50,7 @@ pub fn is_python(ty: &syn::Type) -> bool {
             .path
             .segments
             .last()
-            .map(|seg| seg.ident == "Python")
-            .unwrap_or(false),
+            .is_some_and(|seg| seg.ident == "Python"),
         _ => false,
     }
 }
@@ -85,11 +84,14 @@ enum PythonDocKind {
     Tokens(TokenStream),
 }
 
-/// Collects all #[doc = "..."] attributes into a TokenStream evaluating to a null-terminated string.
+/// Collects all #[doc = "..."] attributes into a `TokenStream` evaluating to a null-terminated string.
 ///
 /// If this doc is for a callable, the provided `text_signature` can be passed to prepend
 /// this to the documentation suitable for Python to extract this into the `__text_signature__`
 /// attribute.
+/// # Errors
+///
+/// Returns an error if the collected doc string contains a nul byte.
 pub fn get_doc(
     attrs: &[syn::Attribute],
     mut text_signature: Option<String>,
@@ -114,10 +116,10 @@ pub fn get_doc(
                     None => Some(nv.value.span()),
                     Some(span) => span.join(nv.value.span()),
                 };
-                if !first {
-                    current_part.push('\n');
-                } else {
+                if first {
                     first = false;
+                } else {
+                    current_part.push('\n');
                 }
                 if let syn::Expr::Lit(syn::ExprLit {
                     lit: syn::Lit::Str(lit_str),
@@ -139,7 +141,22 @@ pub fn get_doc(
         }
     }
 
-    if !parts.is_empty() {
+    if parts.is_empty() {
+        // Just a string doc - return directly with nul terminator
+        let docs = CString::new(current_part).map_err(|e| {
+            syn::Error::new(
+                current_part_span.unwrap_or(Span::call_site()),
+                format!(
+                    "Python doc may not contain nul byte, found nul at position {}",
+                    e.nul_position()
+                ),
+            )
+        })?;
+        Ok(PythonDoc(PythonDocKind::LitCStr(LitCStr::new(
+            &docs,
+            current_part_span.unwrap_or(Span::call_site()),
+        ))))
+    } else {
         // Doc contained macro pieces - return as `concat!` expression
         if !current_part.is_empty() {
             parts.push(
@@ -159,21 +176,6 @@ pub fn get_doc(
         Ok(PythonDoc(PythonDocKind::Tokens(
             quote!(#pyo3_path::ffi::c_str!(#tokens)),
         )))
-    } else {
-        // Just a string doc - return directly with nul terminator
-        let docs = CString::new(current_part).map_err(|e| {
-            syn::Error::new(
-                current_part_span.unwrap_or(Span::call_site()),
-                format!(
-                    "Python doc may not contain nul byte, found nul at position {}",
-                    e.nul_position()
-                ),
-            )
-        })?;
-        Ok(PythonDoc(PythonDocKind::LitCStr(LitCStr::new(
-            &docs,
-            current_part_span.unwrap_or(Span::call_site()),
-        ))))
     }
 }
 
@@ -203,7 +205,7 @@ pub struct Ctx {
 }
 
 impl Ctx {
-    pub(crate) fn new(attr: &Option<CrateAttribute>, signature: Option<&syn::Signature>) -> Self {
+    pub(crate) fn new(attr: Option<&CrateAttribute>, signature: Option<&syn::Signature>) -> Self {
         let pyo3_path = match attr {
             Some(attr) => PyO3CratePath::Given(attr.value.0.clone()),
             None => PyO3CratePath::Default,
@@ -250,17 +252,79 @@ impl quote::ToTokens for PyO3CratePath {
     }
 }
 
-pub fn apply_renaming_rule(rule: RenamingRule, name: &str) -> String {
-    use heck::*;
+fn to_camel_case(s: &str) -> String {
+    let mut result = String::new();
+    let mut capitalize = false;
+    for c in s.chars() {
+        if c == '_' || c == '-' {
+            capitalize = true;
+        } else if capitalize {
+            result.push(c.to_ascii_uppercase());
+            capitalize = false;
+        } else {
+            result.push(c.to_ascii_lowercase());
+        }
+    }
+    result
+}
 
+fn to_pascal_case(s: &str) -> String {
+    let mut result = String::new();
+    let mut capitalize = true;
+    for c in s.chars() {
+        if c == '_' || c == '-' {
+            capitalize = true;
+        } else if capitalize {
+            result.push(c.to_ascii_uppercase());
+            capitalize = false;
+        } else {
+            result.push(c.to_ascii_lowercase());
+        }
+    }
+    result
+}
+
+fn to_kebab_case(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            if c == '_' {
+                '-'
+            } else {
+                c.to_ascii_lowercase()
+            }
+        })
+        .collect()
+}
+
+fn to_screaming_kebab_case(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            if c == '_' {
+                '-'
+            } else {
+                c.to_ascii_uppercase()
+            }
+        })
+        .collect()
+}
+
+fn to_screaming_snake_case(s: &str) -> String {
+    s.to_uppercase().replace('-', "_")
+}
+
+fn to_snake_case(s: &str) -> String {
+    s.to_lowercase().replace('-', "_")
+}
+
+pub fn apply_renaming_rule(rule: RenamingRule, name: &str) -> String {
     match rule {
-        RenamingRule::CamelCase => name.to_lower_camel_case(),
-        RenamingRule::KebabCase => name.to_kebab_case(),
+        RenamingRule::CamelCase => to_camel_case(name),
+        RenamingRule::KebabCase => to_kebab_case(name),
         RenamingRule::Lowercase => name.to_lowercase(),
-        RenamingRule::PascalCase => name.to_upper_camel_case(),
-        RenamingRule::ScreamingKebabCase => name.to_shouty_kebab_case(),
-        RenamingRule::ScreamingSnakeCase => name.to_shouty_snake_case(),
-        RenamingRule::SnakeCase => name.to_snake_case(),
+        RenamingRule::PascalCase => to_pascal_case(name),
+        RenamingRule::ScreamingKebabCase => to_screaming_kebab_case(name),
+        RenamingRule::ScreamingSnakeCase => to_screaming_snake_case(name),
+        RenamingRule::SnakeCase => to_snake_case(name),
         RenamingRule::Uppercase => name.to_uppercase(),
     }
 }
@@ -276,7 +340,7 @@ pub(crate) fn has_attribute(attrs: &[syn::Attribute], ident: &str) -> bool {
 
 pub(crate) fn has_attribute_with_namespace(
     attrs: &[syn::Attribute],
-    crate_path: Option<&PyO3CratePath>,
+    crate_path: Option<PyO3CratePath>,
     idents: &[&str],
 ) -> bool {
     let mut segments = vec![];
@@ -289,7 +353,7 @@ pub(crate) fn has_attribute_with_namespace(
             }
             PyO3CratePath::Default => segments.push(IdentOrStr::Str("pyo3")),
         }
-    };
+    }
     for i in idents {
         segments.push(IdentOrStr::Str(i));
     }
