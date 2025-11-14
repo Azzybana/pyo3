@@ -24,7 +24,7 @@ extern "C" {
 #[cfg(Py_3_9)]
 #[inline]
 pub unsafe fn PyCFunction_CheckExact(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == ptr::addr_of_mut!(PyCFunction_Type)) as c_int
+    c_int::from(Py_TYPE(op) == ptr::addr_of_mut!(PyCFunction_Type))
 }
 
 #[cfg(Py_3_9)]
@@ -97,7 +97,7 @@ extern "C" {
 /// Represents the [PyMethodDef](https://docs.python.org/3/c-api/structures.html#c.PyMethodDef)
 /// structure.
 ///
-/// Note that CPython may leave fields uninitialized. You must ensure that
+/// Note that `CPython` may leave fields uninitialized. You must ensure that
 /// `ml_name` != NULL before dereferencing or reading other fields.
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -109,6 +109,7 @@ pub struct PyMethodDef {
 }
 
 impl PyMethodDef {
+    #[must_use]
     pub const fn zeroed() -> PyMethodDef {
         PyMethodDef {
             ml_name: ptr::null(),
@@ -136,7 +137,7 @@ impl Default for PyMethodDef {
 
 /// Function types used to implement Python callables.
 ///
-/// This function pointer must be accompanied by the correct [ml_flags](PyMethodDef::ml_flags),
+/// This function pointer must be accompanied by the correct [`ml_flags`](PyMethodDef::ml_flags),
 /// otherwise the behavior is undefined.
 ///
 /// See the [Python C API documentation][1] for more information.
@@ -177,14 +178,17 @@ pub union PyMethodDefPointer {
 }
 
 impl PyMethodDefPointer {
+    #[must_use]
     pub fn as_ptr(&self) -> *mut c_void {
         unsafe { self.Void }
     }
 
+    #[must_use]
     pub fn is_null(&self) -> bool {
         self.as_ptr().is_null()
     }
 
+    #[must_use]
     pub const fn zeroed() -> PyMethodDefPointer {
         PyMethodDefPointer {
             Void: ptr::null_mut(),
