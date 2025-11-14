@@ -17,7 +17,7 @@ pub enum ContainerAttribute {
     ErrorAnnotation(LitStr),
     /// Change the path for the pyo3 crate
     Crate(CrateAttribute),
-    /// Converts the field idents according to the [RenamingRule](attributes::RenamingRule) before extraction
+    /// Converts the field idents according to the [`RenamingRule`](attributes::RenamingRule) before extraction
     RenameAll(RenameAllAttribute),
 }
 
@@ -54,7 +54,7 @@ pub struct ContainerAttributes {
     pub annotation: Option<syn::LitStr>,
     /// Change the path for the pyo3 crate
     pub krate: Option<CrateAttribute>,
-    /// Converts the field idents according to the [RenamingRule](attributes::RenamingRule) before extraction
+    /// Converts the field idents according to the [`RenamingRule`](attributes::RenamingRule) before extraction
     pub rename_all: Option<RenameAllAttribute>,
 }
 
@@ -206,7 +206,7 @@ impl FieldAttributes {
 
         match option {
             FieldAttribute::Getter(getter) => {
-                set_option!(getter, "only one of `attribute` or `item` can be provided")
+                set_option!(getter, "only one of `attribute` or `item` can be provided");
             }
             FieldAttribute::FromPyWith(from_py_with) => set_option!(from_py_with),
             FieldAttribute::IntoPyWith(into_py_with) => set_option!(into_py_with),
