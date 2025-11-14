@@ -556,7 +556,7 @@ mod tests {
         assert_eq!(
             "def func(posonly, /, arg, *varargs, karg: str, **kwarg: str) -> list[str]: ...",
             function_stubs(&function, &Imports::default())
-        )
+        );
     }
 
     #[test]
@@ -588,7 +588,7 @@ mod tests {
         assert_eq!(
             "def afunc(posonly=1, /, arg=True, *, karg: str = \"foo\"): ...",
             function_stubs(&function, &Imports::default())
-        )
+        );
     }
 
     #[test]
