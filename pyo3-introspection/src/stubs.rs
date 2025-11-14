@@ -492,7 +492,7 @@ impl ElementsUsedInAnnotations {
             }
             TypeHintExpr::Union(elts) => {
                 for elt in elts {
-                    self.walk_type_hint_expr(elt)
+                    self.walk_type_hint_expr(elt);
                 }
             }
             TypeHintExpr::Subscript { value, slice } => {
