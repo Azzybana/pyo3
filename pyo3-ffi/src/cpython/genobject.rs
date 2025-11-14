@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, PyObject_TypeCheck, Py_TYPE};
 use crate::PyFrameObject;
 #[cfg(all(Py_3_11, not(any(PyPy, GraalPy, Py_3_14))))]
 use std::ffi::c_char;
@@ -52,7 +52,7 @@ pub unsafe fn PyGen_Check(op: *mut PyObject) -> c_int {
 
 #[inline]
 pub unsafe fn PyGen_CheckExact(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == addr_of_mut!(PyGen_Type)) as c_int
+    c_int::from(Py_TYPE(op) == addr_of_mut!(PyGen_Type))
 }
 
 extern "C" {
