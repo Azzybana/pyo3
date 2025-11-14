@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::PyObject;
 #[cfg(not(any(PyPy, Py_LIMITED_API, Py_3_10)))]
 use libc::FILE;
 #[cfg(any(Py_LIMITED_API, not(Py_3_10), PyPy, GraalPy))]
