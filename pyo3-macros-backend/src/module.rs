@@ -42,7 +42,7 @@ pub struct PyModuleOptions {
 
 impl Parse for PyModuleOptions {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        let mut options: PyModuleOptions = Default::default();
+        let mut options: PyModuleOptions = PyModuleOptions::default();
 
         options.add_attributes(
             Punctuated::<PyModulePyO3Option, syn::Token![,]>::parse_terminated(input)?,
@@ -84,7 +84,7 @@ impl PyModuleOptions {
                         " (it is implicitly always specified for nested modules)"
                     ),
                     PyModulePyO3Option::GILUsed(gil_used) => {
-                        set_option!(gil_used)
+                        set_option!(gil_used);
                     }
                 }
 
