@@ -1,4 +1,4 @@
-use crate::object::{PyTypeObject, PyObject, Py_TYPE};
+use crate::object::{PyObject, PyTypeObject, Py_TYPE};
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr::addr_of_mut;
 
