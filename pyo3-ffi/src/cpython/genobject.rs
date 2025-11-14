@@ -1,4 +1,4 @@
-use crate::object::{PyTypeObject, PyObject, PyObject_TypeCheck, Py_TYPE};
+use crate::object::{PyObject, PyObject_TypeCheck, PyTypeObject, Py_TYPE};
 use crate::PyFrameObject;
 #[cfg(all(Py_3_11, not(any(PyPy, GraalPy, Py_3_14))))]
 use std::ffi::c_char;
