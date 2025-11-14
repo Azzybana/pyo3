@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, PyType_FastSubclass, Py_TYPE, Py_TPFLAGS_BYTES_SUBCLASS};
 use crate::pyport::Py_ssize_t;
 use std::ffi::{c_char, c_int};
 use std::ptr::addr_of_mut;
@@ -17,7 +17,7 @@ pub unsafe fn PyBytes_Check(op: *mut PyObject) -> c_int {
 
 #[inline]
 pub unsafe fn PyBytes_CheckExact(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == addr_of_mut!(PyBytes_Type)) as c_int
+    c_int::from(Py_TYPE(op) == addr_of_mut!(PyBytes_Type))
 }
 
 extern "C" {
