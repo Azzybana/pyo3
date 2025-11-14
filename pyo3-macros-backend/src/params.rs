@@ -37,56 +37,48 @@ impl Holders {
 }
 
 /// Return true if the argument list is simply (*args, **kwds).
-pub fn is_forwarded_args(signature: &FunctionSignature<'_>) -> bool {
+pub fn is_forwarded_args(signature: &FunctionSignature) -> bool {
     matches!(
         signature.arguments.as_slice(),
         [FnArg::VarArgs(..), FnArg::KwArgs(..),]
     )
 }
 
-pub fn impl_arg_params(
-    spec: &FnSpec<'_>,
-    self_: Option<&syn::Type>,
-    fastcall: bool,
+fn impl_forwarded_arg_params(
+    spec: &FnSpec,
+    from_py_with: &TokenStream,
     holders: &mut Holders,
     ctx: &Ctx,
 ) -> (TokenStream, Vec<TokenStream>) {
-    let args_array = syn::Ident::new("output", Span::call_site());
-    let Ctx { pyo3_path, .. } = ctx;
-
-    let from_py_with = spec
+    let arg_convert = spec
         .signature
         .arguments
         .iter()
         .enumerate()
-        .filter_map(|(i, arg)| {
-            let from_py_with = &arg.from_py_with()?.value;
-            let from_py_with_holder = format_ident!("from_py_with_{}", i);
-            Some(quote_spanned! { from_py_with.span() =>
-                let #from_py_with_holder = #from_py_with;
-            })
-        })
-        .collect::<TokenStream>();
+        .map(|(i, arg)| impl_arg_param(arg, i, &mut 0, holders, ctx))
+        .collect();
 
-    if !fastcall && is_forwarded_args(&spec.signature) {
-        // In the varargs convention, we can just pass though if the signature
-        // is (*args, **kwds).
-        let arg_convert = spec
-            .signature
-            .arguments
-            .iter()
-            .enumerate()
-            .map(|(i, arg)| impl_arg_param(arg, i, &mut 0, holders, ctx))
-            .collect();
-        return (
-            quote! {
-                let _args = unsafe { #pyo3_path::impl_::pymethods::BoundRef::ref_from_ptr(py, &_args) };
-                let _kwargs = #pyo3_path::impl_::pymethods::BoundRef::ref_from_ptr_or_opt(py, &_kwargs);
-                #from_py_with
-            },
-            arg_convert,
-        );
-    };
+    let Ctx { pyo3_path, .. } = ctx;
+
+    (
+        quote! {
+            let _args = unsafe { #pyo3_path::impl_::pymethods::BoundRef::ref_from_ptr(py, &_args) };
+            let _kwargs = #pyo3_path::impl_::pymethods::BoundRef::ref_from_ptr_or_opt(py, &_kwargs);
+            #from_py_with
+        },
+        arg_convert,
+    )
+}
+
+fn impl_normal_arg_params(
+    spec: &FnSpec,
+    self_: Option<&syn::Type>,
+    fastcall: bool,
+    from_py_with: &TokenStream,
+    holders: &mut Holders,
+    ctx: &Ctx,
+) -> (TokenStream, Vec<TokenStream>) {
+    let Ctx { pyo3_path, .. } = ctx;
 
     let positional_parameter_names = &spec.signature.python_signature.positional_parameters;
     let positional_only_parameters = &spec.signature.python_signature.positional_only_parameters;
@@ -94,7 +86,7 @@ pub fn impl_arg_params(
         .signature
         .python_signature
         .required_positional_parameters;
-    let keyword_only_parameters = spec
+    let keyword_only_parameters: Vec<TokenStream> = spec
         .signature
         .python_signature
         .keyword_only_parameters
@@ -106,7 +98,8 @@ pub fn impl_arg_params(
                     required: #required,
                 }
             }
-        });
+        })
+        .collect();
 
     let num_params = positional_parameter_names.len() + keyword_only_parameters.len();
 
@@ -137,6 +130,8 @@ pub fn impl_arg_params(
     };
     let python_name = &spec.python_name;
 
+    let args_array = syn::Ident::new("output", Span::call_site());
+
     let extract_expression = if fastcall {
         quote! {
             DESCRIPTION.extract_arguments_fastcall::<#args_handler, #kwargs_handler>(
@@ -158,7 +153,6 @@ pub fn impl_arg_params(
         }
     };
 
-    // create array of arguments, and then parse
     (
         quote! {
                 const DESCRIPTION: #pyo3_path::impl_::extract_argument::FunctionDescription = #pyo3_path::impl_::extract_argument::FunctionDescription {
@@ -177,8 +171,36 @@ pub fn impl_arg_params(
     )
 }
 
+pub fn impl_arg_params(
+    spec: &FnSpec,
+    self_: Option<&syn::Type>,
+    fastcall: bool,
+    holders: &mut Holders,
+    ctx: &Ctx,
+) -> (TokenStream, Vec<TokenStream>) {
+    let from_py_with = spec
+        .signature
+        .arguments
+        .iter()
+        .enumerate()
+        .filter_map(|(i, arg)| {
+            let from_py_with = &arg.from_py_with()?.value;
+            let from_py_with_holder = format_ident!("from_py_with_{}", i);
+            Some(quote_spanned! { from_py_with.span() =>
+                let #from_py_with_holder = #from_py_with;
+            })
+        })
+        .collect::<TokenStream>();
+
+    if !fastcall && is_forwarded_args(&spec.signature) {
+        impl_forwarded_arg_params(spec, &from_py_with, holders, ctx)
+    } else {
+        impl_normal_arg_params(spec, self_, fastcall, &from_py_with, holders, ctx)
+    }
+}
+
 fn impl_arg_param(
-    arg: &FnArg<'_>,
+    arg: &FnArg,
     pos: usize,
     option_pos: &mut usize,
     holders: &mut Holders,
@@ -192,7 +214,7 @@ fn impl_arg_param(
             let from_py_with = format_ident!("from_py_with_{}", pos);
             let arg_value = quote!(#args_array[#option_pos].as_deref());
             *option_pos += 1;
-            impl_regular_arg_param(arg, from_py_with, arg_value, holders, ctx)
+            impl_regular_arg_param(arg, &from_py_with, &arg_value, holders, ctx)
         }
         FnArg::VarArgs(arg) => {
             let holder = holders.push_holder(arg.name.span());
@@ -222,12 +244,12 @@ fn impl_arg_param(
     }
 }
 
-/// Re option_pos: The option slice doesn't contain the py: Python argument, so the argument
+/// Re `option_pos`: The option slice doesn't contain the py: Python argument, so the argument
 /// index and the index in option diverge when using py: Python
 pub(crate) fn impl_regular_arg_param(
-    arg: &RegularArg<'_>,
-    from_py_with: syn::Ident,
-    arg_value: TokenStream, // expected type: Option<&'a Bound<'py, PyAny>>
+    arg: &RegularArg,
+    from_py_with: &syn::Ident,
+    arg_value: &TokenStream, // expected type: Option<&'a Bound<'py, PyAny>>
     holders: &mut Holders,
     ctx: &Ctx,
 ) -> TokenStream {
