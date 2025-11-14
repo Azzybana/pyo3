@@ -195,22 +195,12 @@ features = ["full"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [workspace.lints.clippy]
-checked_conversions = "warn"
-dbg_macro = "warn"
-explicit_into_iter_loop = "warn"
-explicit_iter_loop = "warn"
-filter_map_next = "warn"
-flat_map_option = "warn"
-let_unit_value = "warn"
-manual_assert = "warn"
-manual_ok_or = "warn"
-todo = "warn"
-# TODO: make this "warn"
-# https://github.com/PyO3/pyo3/issues/5487
-undocumented_unsafe_blocks = "allow"
-unnecessary_wraps = "warn"
-useless_transmute = "warn"
-used_underscore_binding = "warn"
+  correctness = "deny"
+  suspicious = "deny"
+  style = "deny"
+  complexity = "deny"
+  perf = "deny"
+  pedantic = "deny"
 
 [workspace.lints.rust]
 elided_lifetimes_in_paths = "warn"
@@ -224,5 +214,11 @@ unsafe_op_in_unsafe_fn = "warn"
 broken_intra_doc_links = "warn"
 bare_urls = "warn"
 
-[lints]
-workspace = true
+[lints.clippy]
+  correctness = "deny"
+  suspicious = "deny"
+  style = "deny"
+  complexity = "deny"
+  perf = "deny"
+  pedantic = "deny"
+
