@@ -291,13 +291,14 @@ impl Parse for PyFunctionOption {
 }
 
 impl PyFunctionOptions {
+    /// # Errors
+    /// Returns `Err` if an attribute parsing error occurs.
     pub fn from_attrs(attrs: &mut Vec<syn::Attribute>) -> syn::Result<Self> {
         let mut options = PyFunctionOptions::default();
         options.add_attributes(take_pyo3_options(attrs)?)?;
         Ok(options)
     }
 
-    ///
     /// # Errors
     /// Returns `Err` if an attribute parsing error occurs.
     pub fn add_attributes(
@@ -361,7 +362,7 @@ pub fn impl_wrap_pyfunction(
         warnings,
     } = options;
 
-    let ctx = &Ctx::new(&krate, Some(&func.sig));
+    let ctx = &Ctx::new(krate.as_ref(), Some(&func.sig));
     let Ctx { pyo3_path, .. } = &ctx;
 
     let python_name = name
@@ -418,7 +419,7 @@ pub fn impl_wrap_pyfunction(
 
     let spec = method::FnSpec {
         tp,
-        name: &func.sig.ident,
+        name: func.sig.ident.clone(),
         convention: CallingConvention::from_signature(&signature),
         python_name,
         signature,
