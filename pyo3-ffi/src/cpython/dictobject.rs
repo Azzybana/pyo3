@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::PyObject;
 use crate::pyport::Py_ssize_t;
 use std::ffi::c_int;
 
