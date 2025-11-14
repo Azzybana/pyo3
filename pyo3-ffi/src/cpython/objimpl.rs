@@ -5,7 +5,7 @@ use std::ffi::c_int;
 #[cfg(not(any(PyPy, GraalPy)))]
 use std::ffi::c_void;
 
-use crate::object::{PyTypeObject, PyObject, Py_TYPE};
+use crate::object::{PyObject, PyTypeObject, Py_TYPE};
 
 // skipped _PyObject_SIZE
 // skipped _PyObject_VAR_SIZE
