@@ -1,4 +1,4 @@
-use crate::object::{PyTypeObject, PyObject, Py_TYPE, PyType_IsSubtype};
+use crate::object::{PyObject, PyTypeObject, PyType_IsSubtype, Py_TYPE};
 #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
 use crate::pyport::Py_hash_t;
 use crate::pyport::Py_ssize_t;
