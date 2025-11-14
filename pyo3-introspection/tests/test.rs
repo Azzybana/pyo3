@@ -54,7 +54,7 @@ fn pytests_stubs() -> Result<()> {
             actual_file_content.replace('\r', ""),
             "The content of file {} is different",
             file_name.display()
-        )
+        );
     }
 
     Ok(())
