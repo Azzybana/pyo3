@@ -162,7 +162,13 @@ pub unsafe fn _PyObject_FastCallTstate(
     args: *const *mut PyObject,
     nargs: Py_ssize_t,
 ) -> *mut PyObject {
-    PyObject_VectorcallTstate(tstate, func, args, nargs.try_into().expect("nargs must be non-negative"), std::ptr::null_mut())
+    PyObject_VectorcallTstate(
+        tstate,
+        func,
+        args,
+        nargs.try_into().expect("nargs must be non-negative"),
+        std::ptr::null_mut(),
+    )
 }
 
 #[cfg(all(Py_3_8, not(any(PyPy, GraalPy))))]
@@ -181,7 +187,6 @@ pub unsafe fn _PyObject_FastCall(
     args: *const *mut PyObject,
     nargs: Py_ssize_t,
 ) -> *mut PyObject {
-
     #[allow(clippy::used_underscore_items)]
     let nargs_u: size_t = nargs
         .try_into()
