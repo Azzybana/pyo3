@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, Py_TYPE};
 use std::ffi::c_int;
 #[cfg(not(PyPy))]
 use std::ptr::addr_of_mut;
@@ -22,6 +22,7 @@ extern "C" {
 
 #[inline]
 #[cfg(not(PyPy))]
+#[allow(clippy::cast_lossless)]
 pub unsafe fn PyTraceBack_Check(op: *mut PyObject) -> c_int {
     (Py_TYPE(op) == addr_of_mut!(PyTraceBack_Type)) as c_int
 }
