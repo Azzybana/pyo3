@@ -312,7 +312,7 @@ impl Imports {
                     let number_of_digits_at_the_end = local_name
                         .bytes()
                         .rev()
-                        .take_while(|b| b.is_ascii_digit())
+                        .take_while(u8::is_ascii_digit)
                         .count();
                     let (local_name_prefix, local_name_number) =
                         local_name.split_at(local_name.len() - number_of_digits_at_the_end);
