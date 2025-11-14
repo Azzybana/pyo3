@@ -259,14 +259,9 @@ pub fn gen_py_method(
             }
         }
         // ordinary functions (with some specialties)
-        (_, (FnType::Fn(_) | FnType::FnClass(_) | FnType::FnStatic)) => {
-            GeneratedPyMethod::Method(impl_py_method_def(
-                cls,
-                spec,
-                &spec.get_doc(meth_attrs, ctx)?,
-                ctx,
-            )?)
-        }
+        (_, (FnType::Fn(_) | FnType::FnClass(_) | FnType::FnStatic)) => GeneratedPyMethod::Method(
+            impl_py_method_def(cls, spec, &spec.get_doc(meth_attrs, ctx)?, ctx)?,
+        ),
         // special prototypes
         (_, FnType::FnNew) | (_, FnType::FnNewClass(_)) => {
             GeneratedPyMethod::Proto(impl_py_method_def_new(cls, spec, ctx)?)
