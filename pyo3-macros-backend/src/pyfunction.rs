@@ -223,7 +223,7 @@ impl ToTokens for PyFunctionWarningAttribute {
         let category_tokens = self
             .category
             .as_ref()
-            .map_or(quote! {}, |cat| cat.to_token_stream());
+            .map_or(quote! {}, ToTokens::to_token_stream);
 
         let token_stream = quote! {
             warn(#message_tokens, #category_tokens)
