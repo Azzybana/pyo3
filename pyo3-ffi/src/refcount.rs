@@ -30,6 +30,7 @@ const _Py_IMMORTAL_REFCNT: Py_ssize_t = {
 // comments in Python.h about the choices for these constants
 
 #[cfg(all(Py_3_14, not(Py_GIL_DISABLED)))]
+#[allow(clippy::cast_possible_wrap)]
 const _Py_IMMORTAL_INITIAL_REFCNT: Py_ssize_t = {
     if cfg!(target_pointer_width = "64") {
         ((3 as c_ulong) << (30 as c_ulong)) as Py_ssize_t
@@ -115,7 +116,8 @@ pub unsafe fn Py_REFCNT(ob: *mut PyObject) -> Py_ssize_t {
 }
 
 #[cfg(Py_3_12)]
-#[inline(always)]
+#[inline]
+#[allow(clippy::cast_lossless, clippy::cast_possible_truncation)]
 unsafe fn _Py_IsImmortal(op: *mut PyObject) -> c_int {
     #[cfg(all(target_pointer_width = "64", not(Py_GIL_DISABLED)))]
     {
@@ -172,7 +174,7 @@ extern "C" {
     fn _Py_REFCNT(arg1: *const PyObject) -> Py_ssize_t;
 }
 
-#[inline(always)]
+#[inline]
 pub unsafe fn Py_INCREF(op: *mut PyObject) {
     // On limited API, the free-threaded build, or with refcount debugging, let the interpreter do refcounting
     // TODO: reimplement the logic in the header in the free-threaded build, for a little bit of performance.
@@ -206,6 +208,7 @@ pub unsafe fn Py_INCREF(op: *mut PyObject) {
         #[cfg(all(Py_3_14, target_pointer_width = "64"))]
         {
             let cur_refcnt = (*op).ob_refcnt.ob_refcnt;
+            #[allow(clippy::cast_possible_truncation)]
             if (cur_refcnt as i32) < 0 {
                 return;
             }
@@ -244,7 +247,7 @@ pub unsafe fn Py_INCREF(op: *mut PyObject) {
 // skipped _Py_DecRefSharedDebug
 // skipped _Py_MergeZeroLocalRefcount
 
-#[inline(always)]
+#[inline]
 #[cfg_attr(
     all(py_sys_config = "Py_REF_DEBUG", Py_3_12, not(Py_LIMITED_API)),
     track_caller
@@ -280,6 +283,7 @@ pub unsafe fn Py_DECREF(op: *mut PyObject) {
     )))]
     {
         #[cfg(Py_3_12)]
+        #[allow(clippy::used_underscore_items)]
         if _Py_IsImmortal(op) != 0 {
             return;
         }
@@ -329,14 +333,14 @@ pub unsafe fn Py_CLEAR(op: *mut *mut PyObject) {
 #[inline]
 pub unsafe fn Py_XINCREF(op: *mut PyObject) {
     if !op.is_null() {
-        Py_INCREF(op)
+        Py_INCREF(op);
     }
 }
 
 #[inline]
 pub unsafe fn Py_XDECREF(op: *mut PyObject) {
     if !op.is_null() {
-        Py_DECREF(op)
+        Py_DECREF(op);
     }
 }
 
