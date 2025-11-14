@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyObject, PySendResult, Py_TYPE};
 use crate::pyport::Py_ssize_t;
 #[cfg(any(Py_3_12, all(Py_3_8, not(Py_LIMITED_API))))]
 use libc::size_t;
@@ -202,7 +202,7 @@ extern "C" {
 #[inline]
 pub unsafe fn PyIndex_Check(o: *mut PyObject) -> c_int {
     let tp_as_number = (*Py_TYPE(o)).tp_as_number;
-    (!tp_as_number.is_null() && (*tp_as_number).nb_index.is_some()) as c_int
+    c_int::from(!tp_as_number.is_null() && (*tp_as_number).nb_index.is_some())
 }
 
 extern "C" {
