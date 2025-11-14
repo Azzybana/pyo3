@@ -370,11 +370,7 @@ pub fn impl_wrap_pyfunction(
         .sig
         .inputs
         .iter_mut()
-        .skip(if tp.skip_first_rust_argument_in_python_signature() {
-            1
-        } else {
-            0
-        })
+        .skip(tp.skip_first_rust_argument_in_python_signature() as usize)
         .map(FnArg::parse)
         .try_combine_syn_errors()?;
 
