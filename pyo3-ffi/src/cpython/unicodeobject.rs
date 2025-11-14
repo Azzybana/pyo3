@@ -290,7 +290,7 @@ pub struct PyASCIIObject {
     ///
     /// Before 3.12:
     /// unsigned int interned:2; // SSTATE_* constants.
-    /// unsigned int kind:3;     // PyUnicode_*_KIND constants.
+    /// unsigned int kind:3;     // `PyUnicode`_*_KIND constants.
     /// unsigned int compact:1;
     /// unsigned int ascii:1;
     /// unsigned int ready:1;
@@ -298,12 +298,12 @@ pub struct PyASCIIObject {
     ///
     /// 3.12, and 3.13
     /// unsigned int interned:2; // SSTATE_* constants.
-    /// unsigned int kind:3;     // PyUnicode_*_KIND constants.
+    /// unsigned int kind:3;     // `PyUnicode`_*_KIND constants.
     /// unsigned int compact:1;
     /// unsigned int ascii:1;
-    /// unsigned int statically_allocated:1;
+    /// unsigned int `statically_allocated:1`;
     /// unsigned int :24;
-    /// on 3.14 and higher PyO3 doesn't access the internal state
+    /// on 3.14 and higher `PyO3` doesn't access the internal state
     pub state: u32,
     #[cfg(not(Py_3_12))]
     pub wstr: *mut wchar_t,
@@ -436,6 +436,7 @@ impl PyASCIIObject {
 }
 
 #[repr(C)]
+#[allow(clippy::pub_underscore_fields)]
 pub struct PyCompactUnicodeObject {
     pub _base: PyASCIIObject,
     pub utf8_length: Py_ssize_t,
@@ -453,6 +454,7 @@ pub union PyUnicodeObjectData {
 }
 
 #[repr(C)]
+#[allow(clippy::pub_underscore_fields)]
 pub struct PyUnicodeObject {
     pub _base: PyCompactUnicodeObject,
     pub data: PyUnicodeObjectData,
@@ -507,19 +509,19 @@ pub const PyUnicode_4BYTE_KIND: c_uint = 4;
 #[cfg(not(any(GraalPy, PyPy)))]
 #[inline]
 pub unsafe fn PyUnicode_1BYTE_DATA(op: *mut PyObject) -> *mut Py_UCS1 {
-    PyUnicode_DATA(op) as *mut Py_UCS1
+    PyUnicode_DATA(op).cast::<Py_UCS1>()
 }
 
 #[cfg(not(any(GraalPy, PyPy)))]
 #[inline]
 pub unsafe fn PyUnicode_2BYTE_DATA(op: *mut PyObject) -> *mut Py_UCS2 {
-    PyUnicode_DATA(op) as *mut Py_UCS2
+    PyUnicode_DATA(op).cast::<Py_UCS2>()
 }
 
 #[cfg(not(any(GraalPy, PyPy)))]
 #[inline]
 pub unsafe fn PyUnicode_4BYTE_DATA(op: *mut PyObject) -> *mut Py_UCS4 {
-    PyUnicode_DATA(op) as *mut Py_UCS4
+    PyUnicode_DATA(op).cast::<Py_UCS4>()
 }
 
 #[cfg(all(not(GraalPy), Py_3_14))]
@@ -551,9 +553,9 @@ pub unsafe fn _PyUnicode_COMPACT_DATA(op: *mut PyObject) -> *mut c_void {
 #[cfg(not(any(GraalPy, PyPy)))]
 #[inline]
 pub unsafe fn _PyUnicode_NONCOMPACT_DATA(op: *mut PyObject) -> *mut c_void {
-    debug_assert!(!(*(op as *mut PyUnicodeObject)).data.any.is_null());
+    debug_assert!(!(*op.cast::<PyUnicodeObject>()).data.any.is_null());
 
-    (*(op as *mut PyUnicodeObject)).data.any
+    (*op.cast::<PyUnicodeObject>()).data.any
 }
 
 #[cfg(not(any(GraalPy, PyPy, Py_3_14)))]
@@ -586,7 +588,7 @@ pub unsafe fn PyUnicode_GET_LENGTH(op: *mut PyObject) -> Py_ssize_t {
     #[cfg(not(Py_3_12))]
     debug_assert!(PyUnicode_IS_READY(op) != 0);
 
-    (*(op as *mut PyASCIIObject)).length
+    (*op.cast::<PyASCIIObject>()).length
 }
 
 #[cfg(any(Py_3_12, GraalPy))]
