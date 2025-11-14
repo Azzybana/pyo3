@@ -1,6 +1,6 @@
-use std::borrow::Cow;
 use std::ffi::CString;
 use std::fmt::Display;
+use std::fmt::Write;
 
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
@@ -21,17 +21,17 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub struct RegularArg<'a> {
-    pub name: Cow<'a, syn::Ident>,
-    pub ty: &'a syn::Type,
+pub struct RegularArg {
+    pub name: syn::Ident,
+    pub ty: syn::Type,
     pub from_py_with: Option<FromPyWithAttribute>,
     pub default_value: Option<syn::Expr>,
-    pub option_wrapped_type: Option<&'a syn::Type>,
+    pub option_wrapped_type: Option<syn::Type>,
     #[cfg(feature = "experimental-inspect")]
     pub annotation: Option<String>,
 }
 
-impl RegularArg<'_> {
+impl RegularArg {
     pub fn default_value(&self) -> String {
         if let Self {
             default_value: Some(arg_default),
@@ -55,62 +55,64 @@ impl RegularArg<'_> {
 
 /// Pythons *args argument
 #[derive(Clone, Debug)]
-pub struct VarargsArg<'a> {
-    pub name: Cow<'a, syn::Ident>,
-    pub ty: &'a syn::Type,
+pub struct VarargsArg {
+    pub name: syn::Ident,
+    pub ty: syn::Type,
     #[cfg(feature = "experimental-inspect")]
     pub annotation: Option<String>,
 }
 
 /// Pythons **kwarg argument
 #[derive(Clone, Debug)]
-pub struct KwargsArg<'a> {
-    pub name: Cow<'a, syn::Ident>,
-    pub ty: &'a syn::Type,
+pub struct KwargsArg {
+    pub name: syn::Ident,
+    pub ty: syn::Type,
     #[cfg(feature = "experimental-inspect")]
     pub annotation: Option<String>,
 }
 
 #[derive(Clone, Debug)]
-pub struct CancelHandleArg<'a> {
-    pub name: &'a syn::Ident,
-    pub ty: &'a syn::Type,
+pub struct CancelHandleArg {
+    pub name: syn::Ident,
+    pub ty: syn::Type,
 }
 
 #[derive(Clone, Debug)]
-pub struct PyArg<'a> {
-    pub name: &'a syn::Ident,
-    pub ty: &'a syn::Type,
+pub struct PyArg {
+    pub name: syn::Ident,
+    pub ty: syn::Type,
 }
 
 #[allow(clippy::large_enum_variant)] // See #5039
 #[derive(Clone, Debug)]
-pub enum FnArg<'a> {
-    Regular(RegularArg<'a>),
-    VarArgs(VarargsArg<'a>),
-    KwArgs(KwargsArg<'a>),
-    Py(PyArg<'a>),
-    CancelHandle(CancelHandleArg<'a>),
+pub enum FnArg {
+    Regular(RegularArg),
+    VarArgs(VarargsArg),
+    KwArgs(KwargsArg),
+    Py(PyArg),
+    CancelHandle(CancelHandleArg),
 }
 
-impl<'a> FnArg<'a> {
+impl FnArg {
+    #[allow(clippy::match_same_arms)]
     pub fn name(&self) -> &syn::Ident {
         match self {
             FnArg::Regular(RegularArg { name, .. }) => name,
             FnArg::VarArgs(VarargsArg { name, .. }) => name,
             FnArg::KwArgs(KwargsArg { name, .. }) => name,
-            FnArg::Py(PyArg { name, .. }) => name,
-            FnArg::CancelHandle(CancelHandleArg { name, .. }) => name,
+            FnArg::Py(PyArg { name, .. }) | FnArg::CancelHandle(CancelHandleArg { name, .. }) => {
+                name
+            }
         }
     }
 
-    pub fn ty(&self) -> &'a syn::Type {
+    pub fn ty(&self) -> &syn::Type {
         match self {
-            FnArg::Regular(RegularArg { ty, .. }) => ty,
-            FnArg::VarArgs(VarargsArg { ty, .. }) => ty,
-            FnArg::KwArgs(KwargsArg { ty, .. }) => ty,
-            FnArg::Py(PyArg { ty, .. }) => ty,
-            FnArg::CancelHandle(CancelHandleArg { ty, .. }) => ty,
+            FnArg::Regular(RegularArg { ty, .. })
+            | FnArg::VarArgs(VarargsArg { ty, .. })
+            | FnArg::KwArgs(KwargsArg { ty, .. })
+            | FnArg::Py(PyArg { ty, .. })
+            | FnArg::CancelHandle(CancelHandleArg { ty, .. }) => ty,
         }
     }
 
@@ -138,7 +140,7 @@ impl<'a> FnArg<'a> {
         {
             *self = Self::VarArgs(VarargsArg {
                 name: name.clone(),
-                ty,
+                ty: (*ty).clone(),
                 #[cfg(feature = "experimental-inspect")]
                 annotation: annotation.clone(),
             });
@@ -160,7 +162,7 @@ impl<'a> FnArg<'a> {
         {
             *self = Self::KwArgs(KwargsArg {
                 name: name.clone(),
-                ty,
+                ty: (*ty).clone(),
                 #[cfg(feature = "experimental-inspect")]
                 annotation: annotation.clone(),
             });
@@ -170,8 +172,8 @@ impl<'a> FnArg<'a> {
         }
     }
 
-    /// Transforms a rust fn arg parsed with syn into a method::FnArg
-    pub fn parse(arg: &'a mut syn::FnArg) -> Result<Self> {
+    /// Transforms a rust fn arg parsed with syn into a `method::FnArg`
+    pub fn parse(arg: &mut syn::FnArg) -> Result<Self> {
         match arg {
             syn::FnArg::Receiver(recv) => {
                 bail_spanned!(recv.span() => "unexpected receiver")
@@ -192,8 +194,8 @@ impl<'a> FnArg<'a> {
 
                 if utils::is_python(&cap.ty) {
                     return Ok(Self::Py(PyArg {
-                        name: ident,
-                        ty: &cap.ty,
+                        name: ident.clone(),
+                        ty: (*cap.ty).clone(),
                     }));
                 }
 
@@ -203,17 +205,17 @@ impl<'a> FnArg<'a> {
                     // `cancel_handle` or `from_py_with`, duplicates and any
                     // combination of the two are already rejected.
                     return Ok(Self::CancelHandle(CancelHandleArg {
-                        name: ident,
-                        ty: &cap.ty,
+                        name: ident.clone(),
+                        ty: (*cap.ty).clone(),
                     }));
                 }
 
                 Ok(Self::Regular(RegularArg {
-                    name: Cow::Borrowed(ident),
-                    ty: &cap.ty,
+                    name: ident.clone(),
+                    ty: (*cap.ty).clone(),
                     from_py_with,
                     default_value: None,
-                    option_wrapped_type: utils::option_type_argument(&cap.ty),
+                    option_wrapped_type: utils::option_type_argument(&cap.ty).map(|t| (*t).clone()),
                     #[cfg(feature = "experimental-inspect")]
                     annotation: None,
                 }))
@@ -260,7 +262,7 @@ pub enum FnType {
     FnClass(Span),
     /// Represents a pyfunction or a pymethod annotated with `#[staticmethod]`, like a `@staticmethod`
     FnStatic,
-    /// Represents a pyfunction annotated with `#[pyo3(pass_module)]
+    /// Represents a pyfunction annotated with `#[pyo3(pass_module)]`
     FnModule(Span),
     /// Represents a pymethod or associated constant annotated with `#[classattr]`
     ClassAttribute,
@@ -293,6 +295,7 @@ impl FnType {
         }
     }
 
+    #[allow(clippy::similar_names)]
     pub fn self_arg(
         &self,
         cls: Option<&syn::Type>,
@@ -314,7 +317,7 @@ impl FnType {
             }
             FnType::FnClass(span) | FnType::FnNewClass(span) => {
                 let py = syn::Ident::new("py", Span::call_site());
-                let slf: Ident = syn::Ident::new("_slf", Span::call_site());
+                let slf: Ident = syn::Ident::new("_slf1", Span::call_site());
                 let pyo3_path = pyo3_path.to_tokens_spanned(*span);
                 let ret = quote_spanned! { *span =>
                     #[allow(clippy::useless_conversion, reason = "#[classmethod] accepts anything which implements `From<BoundRef<PyType>>`")]
@@ -327,7 +330,7 @@ impl FnType {
             }
             FnType::FnModule(span) => {
                 let py = syn::Ident::new("py", Span::call_site());
-                let slf: Ident = syn::Ident::new("_slf", Span::call_site());
+                let slf: Ident = syn::Ident::new("_slf2", Span::call_site());
                 let pyo3_path = pyo3_path.to_tokens_spanned(*span);
                 let ret = quote_spanned! { *span =>
                     #[allow(clippy::useless_conversion, reason = "`pass_module` accepts anything which implements `From<BoundRef<PyModule>>`")]
@@ -356,7 +359,7 @@ pub enum ExtractErrorMode {
 }
 
 impl ExtractErrorMode {
-    pub fn handle_error(self, extract: TokenStream, ctx: &Ctx) -> TokenStream {
+    pub fn handle_error(self, extract: &TokenStream, ctx: &Ctx) -> TokenStream {
         let Ctx { pyo3_path, .. } = ctx;
         match self {
             ExtractErrorMode::Raise => quote! { #extract? },
@@ -371,6 +374,7 @@ impl ExtractErrorMode {
 }
 
 impl SelfType {
+    #[allow(clippy::similar_names)]
     pub fn receiver(
         &self,
         cls: &syn::Type,
@@ -380,8 +384,9 @@ impl SelfType {
     ) -> TokenStream {
         // Due to use of quote_spanned in this function, need to bind these idents to the
         // main macro callsite.
+        #[allow(clippy::similar_names)]
         let py = syn::Ident::new("py", Span::call_site());
-        let slf = syn::Ident::new("_slf", Span::call_site());
+        let slf = syn::Ident::new("_slf3", Span::call_site());
         let Ctx { pyo3_path, .. } = ctx;
         let bound_ref =
             quote! { unsafe { #pyo3_path::impl_::pymethods::BoundRef::ref_from_ptr(#py, &#slf) } };
@@ -395,7 +400,7 @@ impl SelfType {
                 let holder = holders.push_holder(*span);
                 let pyo3_path = pyo3_path.to_tokens_spanned(*span);
                 error_mode.handle_error(
-                    quote_spanned! { *span =>
+                    &quote_spanned! { *span =>
                         #pyo3_path::impl_::extract_argument::#method::<#cls>(
                             #bound_ref.0,
                             &mut #holder,
@@ -407,7 +412,7 @@ impl SelfType {
             SelfType::TryFromBoundRef(span) => {
                 let pyo3_path = pyo3_path.to_tokens_spanned(*span);
                 error_mode.handle_error(
-                    quote_spanned! { *span =>
+                    &quote_spanned! { *span =>
                         #bound_ref.cast::<#cls>()
                             .map_err(::std::convert::Into::<#pyo3_path::PyErr>::into)
                             .and_then(
@@ -423,7 +428,7 @@ impl SelfType {
     }
 }
 
-/// Determines which CPython calling convention a given FnSpec uses.
+/// Determines which `CPython` calling convention a given `FnSpec` uses.
 #[derive(Clone, Debug)]
 pub enum CallingConvention {
     Noargs,   // METH_NOARGS
@@ -435,9 +440,9 @@ pub enum CallingConvention {
 impl CallingConvention {
     /// Determine default calling convention from an argument signature.
     ///
-    /// Different other slots (tp_call, tp_new) can have other requirements
+    /// Different other slots (`tp_call`, `tp_new`) can have other requirements
     /// and are set manually (see `parse_fn_type` below).
-    pub fn from_signature(signature: &FunctionSignature<'_>) -> Self {
+    pub fn from_signature(signature: &FunctionSignature) -> Self {
         if signature.python_signature.has_no_args() {
             Self::Noargs
         } else if signature.python_signature.kwargs.is_none() && !is_abi3_before(3, 10) {
@@ -453,14 +458,14 @@ impl CallingConvention {
 }
 
 #[derive(Clone)]
-pub struct FnSpec<'a> {
+pub struct FnSpec {
     pub tp: FnType,
     // Rust function name
-    pub name: &'a syn::Ident,
+    pub name: syn::Ident,
     // Wrapped python name. This should not have any leading r#.
     // r# can be removed by syn::ext::IdentExt::unraw()
     pub python_name: syn::Ident,
-    pub signature: FunctionSignature<'a>,
+    pub signature: FunctionSignature,
     pub convention: CallingConvention,
     pub text_signature: Option<TextSignatureAttribute>,
     pub asyncness: Option<syn::Token![async]>,
@@ -492,14 +497,14 @@ pub fn parse_method_receiver(arg: &syn::FnArg) -> Result<SelfType> {
     }
 }
 
-impl<'a> FnSpec<'a> {
-    /// Parser function signature and function attributes
+impl FnSpec {
+    /// Parses function signature and function attributes
     pub fn parse(
         // Signature is mutable to remove the `Python` argument.
-        sig: &'a mut syn::Signature,
+        sig: &mut syn::Signature,
         meth_attrs: &mut Vec<syn::Attribute>,
         options: PyFunctionOptions,
-    ) -> Result<FnSpec<'a>> {
+    ) -> Result<FnSpec> {
         let PyFunctionOptions {
             text_signature,
             name,
@@ -519,11 +524,9 @@ impl<'a> FnSpec<'a> {
         let arguments: Vec<_> = sig
             .inputs
             .iter_mut()
-            .skip(if fn_type.skip_first_rust_argument_in_python_signature() {
-                1
-            } else {
-                0
-            })
+            .skip(usize::from(
+                fn_type.skip_first_rust_argument_in_python_signature(),
+            ))
             .map(FnArg::parse)
             .collect::<Result<_>>()?;
 
@@ -541,7 +544,7 @@ impl<'a> FnSpec<'a> {
 
         Ok(FnSpec {
             tp: fn_type,
-            name,
+            name: name.clone(),
             convention,
             python_name,
             signature,
@@ -655,7 +658,7 @@ impl<'a> FnSpec<'a> {
                 let mut msg = format!("`{first}` may not be combined with");
                 let mut is_first = true;
                 for attr in &*rest {
-                    msg.push_str(&format!(" `{attr}`"));
+                    write!(msg, " `{attr}`").unwrap();
                     if is_first {
                         is_first = false;
                     } else {
@@ -665,7 +668,7 @@ impl<'a> FnSpec<'a> {
                 if !rest.is_empty() {
                     msg.push_str(" and");
                 }
-                msg.push_str(&format!(" `{last}`"));
+                write!(msg, " `{last}`").unwrap();
                 bail_spanned!(span => msg)
             }
         };
@@ -673,6 +676,7 @@ impl<'a> FnSpec<'a> {
     }
 
     /// Return a C wrapper function for this signature.
+    #[allow(clippy::too_many_lines)]
     pub fn get_wrapper_function(
         &self,
         ident: &proc_macro2::Ident,
@@ -708,9 +712,10 @@ impl<'a> FnSpec<'a> {
                     quote! { None }
                 };
                 let python_name = &self.python_name;
-                let qualname_prefix = match cls {
-                    Some(cls) => quote!(Some(<#cls as #pyo3_path::PyClass>::NAME)),
-                    None => quote!(None),
+                let qualname_prefix = if let Some(cls) = cls {
+                    quote!(Some(<#cls as #pyo3_path::PyClass>::NAME))
+                } else {
+                    quote!(None)
                 };
                 let arg_names = (0..args.len())
                     .map(|i| format_ident!("arg_{}", i))
@@ -930,7 +935,7 @@ impl<'a> FnSpec<'a> {
         }
     }
 
-    /// Forwards to [utils::get_doc] with the text signature of this spec.
+    /// Forwards to [`utils::get_doc`] with the text signature of this spec.
     pub fn get_doc(&self, attrs: &[syn::Attribute], ctx: &Ctx) -> syn::Result<PythonDoc> {
         let text_signature = self
             .text_signature_call_signature()
