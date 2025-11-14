@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, Py_TYPE};
 use crate::pyport::Py_ssize_t;
 
 #[cfg(not(GraalPy))]
@@ -80,7 +80,7 @@ extern "C" {
 #[inline]
 #[cfg(not(PyPy))]
 pub unsafe fn PyCode_Check(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == addr_of_mut!(PyCode_Type)) as c_int
+    c_int::from(Py_TYPE(op) == addr_of_mut!(PyCode_Type))
 }
 
 extern "C" {
