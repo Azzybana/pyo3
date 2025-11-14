@@ -250,7 +250,7 @@ pub(crate) fn impl_regular_arg_param(
     // Option<T> arguments have special treatment: the default should be specified _without_ the
     // Some() wrapper. Maybe this should be changed in future?!
     if arg.option_wrapped_type.is_some() {
-        default = default.map(|tokens| some_wrap(tokens, ctx));
+        default = default.map(|tokens| some_wrap(&tokens, ctx));
     }
 
     if let Some(FromPyWithAttribute { kw, .. }) = arg.from_py_with {
