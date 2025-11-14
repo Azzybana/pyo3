@@ -1,4 +1,4 @@
-use crate::object::{PyVarObject, PyObject, Py_SIZE};
+use crate::object::{PyObject, PyVarObject, Py_SIZE};
 #[cfg(Py_3_14)]
 use crate::pyport::Py_hash_t;
 #[cfg(not(PyPy))]
