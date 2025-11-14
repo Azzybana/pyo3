@@ -82,7 +82,7 @@ fn take_ident(read: &mut &str, tracker: &mut usize) -> Ident {
         match ch {
             'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
                 *tracker += 1;
-                ident.push(ch)
+                ident.push(ch);
             }
             _ => {
                 *read = &read[i..];
@@ -94,7 +94,7 @@ fn take_ident(read: &mut &str, tracker: &mut usize) -> Ident {
 }
 
 // shorthand parsing logic inspiration taken from https://github.com/dtolnay/thiserror/blob/master/impl/src/fmt.rs
-fn parse_shorthand_format(fmt: LitStr) -> Result<(LitStr, Vec<Member>)> {
+fn parse_shorthand_format(fmt: &LitStr) -> Result<(LitStr, Vec<Member>)> {
     let span = fmt.span();
     let token = fmt.token();
     let value = fmt.value();
@@ -104,7 +104,7 @@ fn parse_shorthand_format(fmt: LitStr) -> Result<(LitStr, Vec<Member>)> {
     let mut tracker = 1;
     while let Some(brace) = read.find('{') {
         tracker += brace;
-        out += &read[..brace + 1];
+        out += &read[..=brace];
         read = &read[brace + 1..];
         if read.starts_with('{') {
             out.push('{');
@@ -158,7 +158,8 @@ pub struct StringFormatter {
 
 impl Parse for crate::attributes::StringFormatter {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
-        let (fmt, args) = parse_shorthand_format(input.parse()?)?;
+        let lit: LitStr = input.parse()?;
+        let (fmt, args) = parse_shorthand_format(&lit)?;
         Ok(Self { fmt, args })
     }
 }
