@@ -1,6 +1,6 @@
 #[cfg(not(GraalPy))]
 use crate::longobject::PyLongObject;
-use crate::object::{PyObject, Py_TYPE, PyBool_Type, Py_Is};
+use crate::object::{PyBool_Type, PyObject, Py_Is, Py_TYPE};
 use std::ffi::{c_int, c_long};
 use std::ptr::addr_of_mut;
 
