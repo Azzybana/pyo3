@@ -51,6 +51,7 @@ extern "C" {
 }
 
 #[inline]
+#[must_use]
 pub unsafe fn PyThreadState_GET() -> *mut PyThreadState {
     PyThreadState_Get()
 }
