@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, Py_TYPE, PyObject_TypeCheck};
 use std::ffi::{c_double, c_int};
 use std::ptr::addr_of_mut;
 
@@ -18,6 +18,7 @@ pub unsafe fn PyFloat_Check(op: *mut PyObject) -> c_int {
 }
 
 #[inline]
+#[allow(clippy::cast_lossless)]
 pub unsafe fn PyFloat_CheckExact(op: *mut PyObject) -> c_int {
     (Py_TYPE(op) == addr_of_mut!(PyFloat_Type)) as c_int
 }
