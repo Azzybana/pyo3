@@ -10,6 +10,7 @@ use std::str::FromStr;
 /// It returns a map between the file name and the file content.
 /// The root module stubs will be in the `__init__.pyi` file and the submodules directory
 /// in files with a relevant name.
+#[must_use]
 pub fn module_stub_files(module: &Module) -> HashMap<PathBuf, String> {
     let mut output_files = HashMap::new();
     add_module_stub_files(module, &[], &mut output_files);
