@@ -1,4 +1,4 @@
-use crate::object::{PyTypeObject, PyObject, PyObject_TypeCheck, Py_TYPE};
+use crate::object::{PyObject, PyObject_TypeCheck, PyTypeObject, Py_TYPE};
 #[cfg(not(GraalPy))]
 use crate::{PyCFunctionObject, PyMethodDefPointer, METH_METHOD, METH_STATIC};
 use std::ffi::c_int;
