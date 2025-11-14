@@ -41,7 +41,7 @@ pub struct PyObjectObFlagsAndRefcnt {
     not(Py_GIL_DISABLED),
     target_endian = "little"
 ))]
-/// This struct is anonymous in CPython, so the name was given by PyO3 because
+/// This struct is anonymous in `CPython`, so the name was given by `PyO3` because
 /// Rust structs need a name.
 pub struct PyObjectObFlagsAndRefcnt {
     pub ob_refcnt: u32,
@@ -52,7 +52,7 @@ pub struct PyObjectObFlagsAndRefcnt {
 #[repr(C)]
 #[derive(Copy, Clone)]
 #[cfg(all(Py_3_12, not(Py_GIL_DISABLED)))]
-/// This union is anonymous in CPython, so the name was given by PyO3 because
+/// This union is anonymous in `CPython`, so the name was given by `PyO3` because
 /// Rust union need a name.
 pub union PyObjectObRefcnt {
     #[cfg(all(target_pointer_width = "64", Py_3_14))]
@@ -223,7 +223,7 @@ pub unsafe fn Py_SIZE(ob: *mut PyObject) -> Py_ssize_t {
 
 #[inline]
 pub unsafe fn Py_IS_TYPE(ob: *mut PyObject, tp: *mut PyTypeObject) -> c_int {
-    (Py_TYPE(ob) == tp) as c_int
+    c_int::from(Py_TYPE(ob) == tp)
 }
 
 // skipped Py_SET_TYPE
@@ -370,7 +370,7 @@ extern "C" {
 
 #[inline]
 pub unsafe fn PyObject_TypeCheck(ob: *mut PyObject, tp: *mut PyTypeObject) -> c_int {
-    (Py_IS_TYPE(ob, tp) != 0 || PyType_IsSubtype(Py_TYPE(ob), tp) != 0) as c_int
+    c_int::from(Py_IS_TYPE(ob, tp) != 0 || PyType_IsSubtype(Py_TYPE(ob), tp) != 0)
 }
 
 #[cfg_attr(windows, link(name = "pythonXY"))]
@@ -690,7 +690,7 @@ pub unsafe fn PyType_HasFeature(ty: *mut PyTypeObject, feature: c_ulong) -> c_in
     #[cfg(all(not(Py_LIMITED_API), not(Py_GIL_DISABLED)))]
     let flags = (*ty).tp_flags;
 
-    ((flags & feature) != 0) as c_int
+    c_int::from((flags & feature) != 0)
 }
 
 #[inline]
