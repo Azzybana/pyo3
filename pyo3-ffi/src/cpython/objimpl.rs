@@ -5,7 +5,7 @@ use std::ffi::c_int;
 #[cfg(not(any(PyPy, GraalPy)))]
 use std::ffi::c_void;
 
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, Py_TYPE};
 
 // skipped _PyObject_SIZE
 // skipped _PyObject_VAR_SIZE
@@ -60,13 +60,13 @@ extern "C" {
 
 #[inline]
 pub unsafe fn PyType_SUPPORTS_WEAKREFS(t: *mut PyTypeObject) -> c_int {
-    ((*t).tp_weaklistoffset > 0) as c_int
+    c_int::from((*t).tp_weaklistoffset > 0)
 }
 
 #[inline]
 pub unsafe fn PyObject_GET_WEAKREFS_LISTPTR(o: *mut PyObject) -> *mut *mut PyObject {
     let weaklistoffset = (*Py_TYPE(o)).tp_weaklistoffset;
-    o.offset(weaklistoffset) as *mut *mut PyObject
+    o.offset(weaklistoffset).cast::<*mut PyObject>()
 }
 
 // skipped PyUnstable_Object_GC_NewWithExtraData
