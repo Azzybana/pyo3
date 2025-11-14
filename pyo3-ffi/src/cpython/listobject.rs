@@ -1,4 +1,4 @@
-use crate::object::{PyVarObject, PyObject, Py_SIZE};
+use crate::object::{PyObject, PyVarObject, Py_SIZE};
 #[cfg(not(PyPy))]
 use crate::pyport::Py_ssize_t;
 
