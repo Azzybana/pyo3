@@ -1,12 +1,12 @@
 #[cfg(not(GraalPy))]
 use crate::longobject::PyLongObject;
-use crate::object::*;
+use crate::object::{PyObject, Py_TYPE, PyBool_Type, Py_Is};
 use std::ffi::{c_int, c_long};
 use std::ptr::addr_of_mut;
 
 #[inline]
 pub unsafe fn PyBool_Check(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == addr_of_mut!(PyBool_Type)) as c_int
+    c_int::from(Py_TYPE(op) == addr_of_mut!(PyBool_Type))
 }
 
 #[cfg_attr(windows, link(name = "pythonXY"))]
@@ -27,7 +27,7 @@ extern "C" {
 #[inline]
 pub unsafe fn Py_False() -> *mut PyObject {
     #[cfg(not(GraalPy))]
-    return addr_of_mut!(_Py_FalseStruct) as *mut PyObject;
+    return addr_of_mut!(_Py_FalseStruct).cast::<PyObject>();
     #[cfg(GraalPy)]
     return _Py_FalseStructReference;
 }
@@ -35,7 +35,7 @@ pub unsafe fn Py_False() -> *mut PyObject {
 #[inline]
 pub unsafe fn Py_True() -> *mut PyObject {
     #[cfg(not(GraalPy))]
-    return addr_of_mut!(_Py_TrueStruct) as *mut PyObject;
+    return addr_of_mut!(_Py_TrueStruct).cast::<PyObject>();
     #[cfg(GraalPy)]
     return _Py_TrueStructReference;
 }
