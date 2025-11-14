@@ -47,6 +47,14 @@ const PY_VECTORCALL_ARGUMENTS_OFFSET: size_t =
 
 #[cfg(Py_3_8)]
 #[inline(always)]
+#[must_use]
+/// Returns the number of arguments encoded in a vectorcall nargsf value.
+///
+/// # Panics
+///
+/// This function will panic if the masked value cannot be converted to
+/// `Py_ssize_t`. Given the mask it uses, this should not happen in
+/// practice unless `size_t` and `Py_ssize_t` have incompatible sizes.
 pub unsafe fn PyVectorcall_NARGS(n: size_t) -> Py_ssize_t {
     let n = n & !PY_VECTORCALL_ARGUMENTS_OFFSET;
     n.try_into().expect("cannot fail due to mask")
@@ -54,6 +62,15 @@ pub unsafe fn PyVectorcall_NARGS(n: size_t) -> Py_ssize_t {
 
 #[cfg(all(Py_3_8, not(PyPy)))]
 #[inline(always)]
+/// Returns the vectorcall function pointer for `callable` if the callable's
+/// type supports vectorcall. Otherwise returns `None`.
+///
+/// # Panics
+///
+/// This function panics if any of the following conditions occur:
+/// - `callable` is a null pointer.
+/// - `callable` is not callable (`PyCallable_Check(callable) <= 0`).
+/// - the type's `tp_vectorcall_offset` is not positive (<= 0).
 pub unsafe fn PyVectorcall_Function(callable: *mut PyObject) -> Option<vectorcallfunc> {
     assert!(!callable.is_null());
     let tp = crate::Py_TYPE(callable);
@@ -69,6 +86,13 @@ pub unsafe fn PyVectorcall_Function(callable: *mut PyObject) -> Option<vectorcal
 
 #[cfg(all(Py_3_8, not(PyPy)))]
 #[inline(always)]
+/// # Panics
+///
+/// This function will panic if any of the following conditions occur:
+/// - `kwnames` is non-null and is not a tuple (`PyTuple_Check(kwnames) <= 0`).
+/// - `args` is null while the encoded number of arguments in `nargsf` is non-zero.
+/// - Any of the assertions in `PyVectorcall_Function` fail (e.g. `callable` is null,
+///   or `callable` is not callable, or the type's `tp_vectorcall_offset` is not positive).
 pub unsafe fn _PyObject_VectorcallTstate(
     tstate: *mut PyThreadState,
     callable: *mut PyObject,
