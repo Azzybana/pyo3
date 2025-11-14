@@ -51,7 +51,10 @@ impl Parse for PyFunctionArgPyO3Attribute {
 }
 
 impl PyFunctionArgPyO3Attributes {
-    /// Parses #[pyo3(from_python_with = "func")]
+    /// Parses `#[pyo3(from_python_with = "func")]`
+    ///
+    /// # Errors
+    /// Returns `Err` if an attribute parsing error occurs.
     pub fn from_attrs(attrs: &mut Vec<syn::Attribute>) -> syn::Result<Self> {
         let mut attributes = PyFunctionArgPyO3Attributes {
             from_py_with: None,
@@ -291,6 +294,9 @@ impl PyFunctionOptions {
         Ok(options)
     }
 
+    ///
+    /// # Errors
+    /// Returns `Err` if an attribute parsing error occurs.
     pub fn add_attributes(
         &mut self,
         attrs: impl IntoIterator<Item = PyFunctionOption>,
@@ -322,6 +328,9 @@ impl PyFunctionOptions {
     }
 }
 
+///
+/// # Errors
+/// Returns `Err` if building the function macro fails.
 pub fn build_py_function(
     ast: &mut syn::ItemFn,
     mut options: PyFunctionOptions,
@@ -332,6 +341,9 @@ pub fn build_py_function(
 
 /// Generates python wrapper over a function that allows adding it to a python module as a python
 /// function
+///
+/// # Errors
+/// Returns `Err` if wrapping the function fails.
 pub fn impl_wrap_pyfunction(
     func: &mut syn::ItemFn,
     options: PyFunctionOptions,
