@@ -28,6 +28,7 @@ pub struct Py_buffer {
 
 impl Py_buffer {
     #[allow(clippy::new_without_default)]
+    #[must_use]
     pub const fn new() -> Self {
         Py_buffer {
             buf: ptr::null_mut(),
