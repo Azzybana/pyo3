@@ -25,7 +25,7 @@ fn ensure_auto_initialize_ok(interpreter_config: &InterpreterConfig) -> Result<(
     Ok(())
 }
 
-/// Prepares the PyO3 crate for compilation.
+/// Prepares the `PyO3` crate for compilation.
 ///
 /// This loads the config from pyo3-build-config and then makes some additional checks to improve UX
 /// for users.
