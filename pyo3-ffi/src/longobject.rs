@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyObject, PyType_FastSubclass, Py_TYPE, Py_TPFLAGS_LONG_SUBCLASS, PyLong_Type};
 use crate::pyport::Py_ssize_t;
 use libc::size_t;
 use std::ffi::{c_char, c_double, c_int, c_long, c_longlong, c_ulong, c_ulonglong, c_void};
@@ -13,7 +13,7 @@ pub unsafe fn PyLong_Check(op: *mut PyObject) -> c_int {
 
 #[inline]
 pub unsafe fn PyLong_CheckExact(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == addr_of_mut!(PyLong_Type)) as c_int
+    c_int::from(Py_TYPE(op) == addr_of_mut!(PyLong_Type))
 }
 
 extern "C" {
