@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, PyType_FastSubclass, Py_TPFLAGS_DICT_SUBCLASS, Py_TYPE};
 use crate::pyport::Py_ssize_t;
 use std::ffi::{c_char, c_int};
 use std::ptr::addr_of_mut;
@@ -15,6 +15,7 @@ pub unsafe fn PyDict_Check(op: *mut PyObject) -> c_int {
 }
 
 #[inline]
+#[allow(clippy::cast_lossless)]
 pub unsafe fn PyDict_CheckExact(op: *mut PyObject) -> c_int {
     (Py_TYPE(op) == addr_of_mut!(PyDict_Type)) as c_int
 }
@@ -84,21 +85,25 @@ extern "C" {
 }
 
 #[inline]
+#[allow(clippy::cast_lossless)]
 pub unsafe fn PyDictKeys_Check(op: *mut PyObject) -> c_int {
     (Py_TYPE(op) == addr_of_mut!(PyDictKeys_Type)) as c_int
 }
 
 #[inline]
+#[allow(clippy::cast_lossless)]
 pub unsafe fn PyDictValues_Check(op: *mut PyObject) -> c_int {
     (Py_TYPE(op) == addr_of_mut!(PyDictValues_Type)) as c_int
 }
 
 #[inline]
+#[allow(clippy::cast_lossless)]
 pub unsafe fn PyDictItems_Check(op: *mut PyObject) -> c_int {
     (Py_TYPE(op) == addr_of_mut!(PyDictItems_Type)) as c_int
 }
 
 #[inline]
+#[allow(clippy::cast_lossless)]
 pub unsafe fn PyDictViewSet_Check(op: *mut PyObject) -> c_int {
     (PyDictKeys_Check(op) != 0 || PyDictItems_Check(op) != 0) as c_int
 }
