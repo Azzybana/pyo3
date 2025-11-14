@@ -15,7 +15,9 @@ use crate::{
     get_doc,
     pyclass::PyClassPyO3Option,
     pyfunction::{impl_wrap_pyfunction, PyFunctionOptions},
-    utils::{has_attribute, has_attribute_with_namespace, Ctx, IdentOrStr, PythonDoc},
+    utils::{
+        has_attribute, has_attribute_with_namespace, Ctx, IdentOrStr, PyO3CratePath, PythonDoc,
+    },
 };
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -95,6 +97,285 @@ impl PyModuleOptions {
     }
 }
 
+fn extract_use_items(
+    source: &syn::UseTree,
+    cfg_attrs: &[syn::Attribute],
+    target_items: &mut Vec<syn::Ident>,
+    target_cfg_attrs: &mut Vec<Vec<syn::Attribute>>,
+) -> Result<()> {
+    match source {
+        syn::UseTree::Name(name) => {
+            target_items.push(name.ident.clone());
+            target_cfg_attrs.push(cfg_attrs.to_vec());
+        }
+        syn::UseTree::Path(path) => {
+            extract_use_items(&path.tree, cfg_attrs, target_items, target_cfg_attrs)?;
+        }
+        syn::UseTree::Group(group) => {
+            for tree in &group.items {
+                extract_use_items(tree, cfg_attrs, target_items, target_cfg_attrs)?;
+            }
+        }
+        syn::UseTree::Glob(glob) => {
+            bail_spanned!(glob.span() => "#[pymodule] cannot import glob statements")
+        }
+        syn::UseTree::Rename(rename) => {
+            target_items.push(rename.rename.clone());
+            target_cfg_attrs.push(cfg_attrs.to_vec());
+        }
+    }
+    Ok(())
+}
+
+struct ModuleProcessingState {
+    module_items: Vec<syn::Ident>,
+    module_items_cfg_attrs: Vec<Vec<syn::Attribute>>,
+    introspection_chunks: Vec<TokenStream>,
+    pymodule_init: Option<TokenStream>,
+    module_consts: Vec<syn::Ident>,
+    module_consts_cfg_attrs: Vec<Vec<syn::Attribute>>,
+}
+
+fn process_use_item(
+    state: &mut ModuleProcessingState,
+    item_use: &mut syn::ItemUse,
+    _pyo3_path: &PyO3CratePath,
+) -> Result<()> {
+    let is_pymodule_export = find_and_remove_attribute(&mut item_use.attrs, "pymodule_export");
+    if is_pymodule_export {
+        let cfg_attrs = get_cfg_attributes(&item_use.attrs);
+        extract_use_items(
+            &item_use.tree,
+            &cfg_attrs,
+            &mut state.module_items,
+            &mut state.module_items_cfg_attrs,
+        )?;
+    }
+    Ok(())
+}
+
+fn process_fn_item(
+    state: &mut ModuleProcessingState,
+    item_fn: &mut syn::ItemFn,
+    span: Span,
+    pyo3_path: &PyO3CratePath,
+) -> Result<()> {
+    ensure_spanned!(
+        !has_attribute(&item_fn.attrs, "pymodule_export"),
+        span => "`#[pymodule_export]` may only be used on `use` or `const` statements"
+    );
+    let ident = &item_fn.sig.ident;
+    let is_pymodule_init = find_and_remove_attribute(&mut item_fn.attrs, "pymodule_init");
+    if is_pymodule_init {
+        ensure_spanned!(
+            !has_attribute(&item_fn.attrs, "pyfunction"),
+            item_fn.span() => "`#[pyfunction]` cannot be used alongside `#[pymodule_init]`"
+        );
+        ensure_spanned!(state.pymodule_init.is_none(), item_fn.span() => "only one `#[pymodule_init]` may be specified");
+        state.pymodule_init = Some(quote! { #ident(module)?; });
+    } else if has_attribute(&item_fn.attrs, "pyfunction")
+        || has_attribute_with_namespace(&item_fn.attrs, Some(pyo3_path.clone()), &["pyfunction"])
+        || has_attribute_with_namespace(
+            &item_fn.attrs,
+            Some(pyo3_path.clone()),
+            &["prelude", "pyfunction"],
+        )
+    {
+        state.module_items.push(ident.clone());
+        state
+            .module_items_cfg_attrs
+            .push(get_cfg_attributes(&item_fn.attrs));
+    }
+    Ok(())
+}
+
+fn process_struct_item(
+    state: &mut ModuleProcessingState,
+    item_struct: &mut syn::ItemStruct,
+    span: Span,
+    pyo3_path: &PyO3CratePath,
+    full_name: &str,
+) -> Result<()> {
+    ensure_spanned!(
+        !has_attribute(&item_struct.attrs, "pymodule_export"),
+        span => "`#[pymodule_export]` may only be used on `use` or `const` statements"
+    );
+    if has_attribute(&item_struct.attrs, "pyclass")
+        || has_attribute_with_namespace(&item_struct.attrs, Some(pyo3_path.clone()), &["pyclass"])
+        || has_attribute_with_namespace(
+            &item_struct.attrs,
+            Some(pyo3_path.clone()),
+            &["prelude", "pyclass"],
+        )
+    {
+        state.module_items.push(item_struct.ident.clone());
+        state
+            .module_items_cfg_attrs
+            .push(get_cfg_attributes(&item_struct.attrs));
+        if !has_pyo3_module_declared::<PyClassPyO3Option>(
+            &item_struct.attrs,
+            "pyclass",
+            |option| matches!(option, PyClassPyO3Option::Module(_)),
+        )? {
+            set_module_attribute(&mut item_struct.attrs, full_name);
+        }
+    }
+    Ok(())
+}
+
+fn process_enum_item(
+    state: &mut ModuleProcessingState,
+    item_enum: &mut syn::ItemEnum,
+    span: Span,
+    pyo3_path: &PyO3CratePath,
+    full_name: &str,
+) -> Result<()> {
+    ensure_spanned!(
+        !has_attribute(&item_enum.attrs, "pymodule_export"),
+        span => "`#[pymodule_export]` may only be used on `use` or `const` statements"
+    );
+    if has_attribute(&item_enum.attrs, "pyclass")
+        || has_attribute_with_namespace(&item_enum.attrs, Some(pyo3_path.clone()), &["pyclass"])
+        || has_attribute_with_namespace(
+            &item_enum.attrs,
+            Some(pyo3_path.clone()),
+            &["prelude", "pyclass"],
+        )
+    {
+        state.module_items.push(item_enum.ident.clone());
+        state
+            .module_items_cfg_attrs
+            .push(get_cfg_attributes(&item_enum.attrs));
+        if !has_pyo3_module_declared::<PyClassPyO3Option>(&item_enum.attrs, "pyclass", |option| {
+            matches!(option, PyClassPyO3Option::Module(_))
+        })? {
+            set_module_attribute(&mut item_enum.attrs, full_name);
+        }
+    }
+    Ok(())
+}
+
+fn process_mod_item(
+    state: &mut ModuleProcessingState,
+    item_mod: &mut syn::ItemMod,
+    span: Span,
+    pyo3_path: &PyO3CratePath,
+    full_name: &str,
+) -> Result<()> {
+    ensure_spanned!(
+        !has_attribute(&item_mod.attrs, "pymodule_export"),
+        span => "`#[pymodule_export]` may only be used on `use` or `const` statements"
+    );
+    if has_attribute(&item_mod.attrs, "pymodule")
+        || has_attribute_with_namespace(&item_mod.attrs, Some(pyo3_path.clone()), &["pymodule"])
+        || has_attribute_with_namespace(
+            &item_mod.attrs,
+            Some(pyo3_path.clone()),
+            &["prelude", "pymodule"],
+        )
+    {
+        state.module_items.push(item_mod.ident.clone());
+        state
+            .module_items_cfg_attrs
+            .push(get_cfg_attributes(&item_mod.attrs));
+        if !has_pyo3_module_declared::<PyModulePyO3Option>(&item_mod.attrs, "pymodule", |option| {
+            matches!(option, PyModulePyO3Option::Module(_))
+        })? {
+            set_module_attribute(&mut item_mod.attrs, full_name);
+        }
+        item_mod
+            .attrs
+            .push(parse_quote_spanned!(item_mod.mod_token.span()=> #[pyo3(submodule)]));
+    }
+    Ok(())
+}
+
+#[allow(unused_variables)]
+fn process_const_item(
+    state: &mut ModuleProcessingState,
+    item_const: &mut syn::ItemConst,
+    pyo3_path: &PyO3CratePath,
+) {
+    let is_pymodule_export = find_and_remove_attribute(&mut item_const.attrs, "pymodule_export");
+    if !is_pymodule_export {
+        return;
+    }
+    let cfg_attrs = get_cfg_attributes(&item_const.attrs);
+    state.module_consts.push(item_const.ident.clone());
+    state.module_consts_cfg_attrs.push(cfg_attrs.clone());
+    #[cfg(feature = "experimental-inspect")]
+    {
+        let chunk = attribute_introspection_code(
+            pyo3_path,
+            None,
+            item_const.ident.unraw().to_string(),
+            expr_to_python(&item_const.expr),
+            (*item_const.ty).clone(),
+            true,
+        );
+        state.introspection_chunks.push(quote! {
+            #(#cfg_attrs)*
+            #chunk
+        });
+    }
+}
+
+fn ensure_no_pymodule_export(item: &syn::Item) -> Result<()> {
+    let (attrs, span) = match item {
+        Item::ForeignMod(i) => (&i.attrs, i.span()),
+        Item::Trait(i) => (&i.attrs, i.span()),
+        Item::Static(i) => (&i.attrs, i.span()),
+        Item::Macro(i) => (&i.attrs, i.span()),
+        Item::ExternCrate(i) => (&i.attrs, i.span()),
+        Item::Impl(i) => (&i.attrs, i.span()),
+        Item::TraitAlias(i) => (&i.attrs, i.span()),
+        Item::Type(i) => (&i.attrs, i.span()),
+        Item::Union(i) => (&i.attrs, i.span()),
+        _ => return Ok(()),
+    };
+    ensure_spanned!(
+        !has_attribute(attrs, "pymodule_export"),
+        span => "`#[pymodule_export]` may only be used on `use` or `const` statements"
+    );
+    Ok(())
+}
+
+fn process_module_item(
+    state: &mut ModuleProcessingState,
+    item: &mut syn::Item,
+    pyo3_path: &PyO3CratePath,
+    full_name: &str,
+) -> Result<()> {
+    let span = item.span();
+    match item {
+        Item::Use(ref mut item_use) => process_use_item(state, item_use, pyo3_path),
+        Item::Fn(ref mut item_fn) => process_fn_item(state, item_fn, span, pyo3_path),
+        Item::Struct(ref mut item_struct) => {
+            process_struct_item(state, item_struct, span, pyo3_path, full_name)
+        }
+        Item::Enum(ref mut item_enum) => {
+            process_enum_item(state, item_enum, span, pyo3_path, full_name)
+        }
+        Item::Mod(ref mut item_mod) => {
+            process_mod_item(state, item_mod, span, pyo3_path, full_name)
+        }
+        Item::Const(ref mut item_const) => {
+            process_const_item(state, item_const, pyo3_path);
+            Ok(())
+        }
+        _ => ensure_no_pymodule_export(&*item),
+    }
+}
+
+/// Implement `#[pymodule]` for modules.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The module attributes are invalid.
+/// - The module structure is incorrect (e.g., not an inline module).
+/// - Processing of module items fails.
+/// - Getting documentation fails.
 pub fn pymodule_module_impl(
     module: &mut syn::ItemMod,
     mut options: PyModuleOptions,
@@ -108,13 +389,11 @@ pub fn pymodule_module_impl(
         content,
         semi: _,
     } = module;
-    let items = if let Some((_, items)) = content {
-        items
-    } else {
+    let Some((_, items)) = content else {
         bail_spanned!(mod_token.span() => "`#[pymodule]` can only be used on inline modules")
     };
     options.take_pyo3_options(attrs)?;
-    let ctx = &Ctx::new(&options.krate, None);
+    let ctx = &Ctx::new(options.krate.as_ref(), None);
     let Ctx { pyo3_path, .. } = ctx;
     let doc = get_doc(attrs, None, ctx)?;
     let name = options
@@ -126,261 +405,53 @@ pub fn pymodule_module_impl(
         name.to_string()
     };
 
-    let mut module_items = Vec::new();
-    let mut module_items_cfg_attrs = Vec::new();
-    #[cfg(feature = "experimental-inspect")]
-    let mut introspection_chunks = Vec::new();
-    #[cfg(not(feature = "experimental-inspect"))]
-    let introspection_chunks = Vec::<TokenStream>::new();
+    let mut state = ModuleProcessingState {
+        module_items: Vec::new(),
+        module_items_cfg_attrs: Vec::new(),
+        introspection_chunks: Vec::new(),
+        pymodule_init: None,
+        module_consts: Vec::new(),
+        module_consts_cfg_attrs: Vec::new(),
+    };
 
-    fn extract_use_items(
-        source: &syn::UseTree,
-        cfg_attrs: &[syn::Attribute],
-        target_items: &mut Vec<syn::Ident>,
-        target_cfg_attrs: &mut Vec<Vec<syn::Attribute>>,
-    ) -> Result<()> {
-        match source {
-            syn::UseTree::Name(name) => {
-                target_items.push(name.ident.clone());
-                target_cfg_attrs.push(cfg_attrs.to_vec());
-            }
-            syn::UseTree::Path(path) => {
-                extract_use_items(&path.tree, cfg_attrs, target_items, target_cfg_attrs)?
-            }
-            syn::UseTree::Group(group) => {
-                for tree in &group.items {
-                    extract_use_items(tree, cfg_attrs, target_items, target_cfg_attrs)?
-                }
-            }
-            syn::UseTree::Glob(glob) => {
-                bail_spanned!(glob.span() => "#[pymodule] cannot import glob statements")
-            }
-            syn::UseTree::Rename(rename) => {
-                target_items.push(rename.rename.clone());
-                target_cfg_attrs.push(cfg_attrs.to_vec());
-            }
-        }
-        Ok(())
+    let _: Vec<()> = (*items)
+        .iter_mut()
+        .map(|item| process_module_item(&mut state, item, pyo3_path, &full_name))
+        .try_combine_syn_errors()?;
+
+    let mut add_items = TokenStream::new();
+    for (item, cfg_attrs) in state.module_items.iter().zip(&state.module_items_cfg_attrs) {
+        add_items.extend(quote! {
+            #(#cfg_attrs)*
+            #item::_PYO3_DEF.add_to_module(module)?;
+        });
     }
 
-    let mut pymodule_init = None;
-    let mut module_consts = Vec::new();
-    let mut module_consts_cfg_attrs = Vec::new();
+    let mut add_consts = TokenStream::new();
+    for (const_ident, cfg_attrs) in state
+        .module_consts
+        .iter()
+        .zip(&state.module_consts_cfg_attrs)
+    {
+        let const_name = const_ident.unraw().to_string();
+        add_consts.extend(quote! {
+            #(#cfg_attrs)*
+            #pyo3_path::types::PyModuleMethods::add(module, #const_name, #const_ident)?;
+        });
+    }
 
-    let _: Vec<()> = (*items).iter_mut().map(|item|{
-        match item {
-            Item::Use(item_use) => {
-                let is_pymodule_export =
-                    find_and_remove_attribute(&mut item_use.attrs, "pymodule_export");
-                if is_pymodule_export {
-                    let cfg_attrs = get_cfg_attributes(&item_use.attrs);
-                    extract_use_items(
-                        &item_use.tree,
-                        &cfg_attrs,
-                        &mut module_items,
-                        &mut module_items_cfg_attrs,
-                    )?;
-                }
-            }
-            Item::Fn(item_fn) => {
-                ensure_spanned!(
-                    !has_attribute(&item_fn.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-                let is_pymodule_init =
-                    find_and_remove_attribute(&mut item_fn.attrs, "pymodule_init");
-                let ident = &item_fn.sig.ident;
-                if is_pymodule_init {
-                    ensure_spanned!(
-                        !has_attribute(&item_fn.attrs, "pyfunction"),
-                        item_fn.span() => "`#[pyfunction]` cannot be used alongside `#[pymodule_init]`"
-                    );
-                    ensure_spanned!(pymodule_init.is_none(), item_fn.span() => "only one `#[pymodule_init]` may be specified");
-                    pymodule_init = Some(quote! { #ident(module)?; });
-                } else if has_attribute(&item_fn.attrs, "pyfunction")
-                    || has_attribute_with_namespace(
-                        &item_fn.attrs,
-                        Some(pyo3_path),
-                        &["pyfunction"],
-                    )
-                    || has_attribute_with_namespace(
-                        &item_fn.attrs,
-                        Some(pyo3_path),
-                        &["prelude", "pyfunction"],
-                    )
-                {
-                    module_items.push(ident.clone());
-                    module_items_cfg_attrs.push(get_cfg_attributes(&item_fn.attrs));
-                }
-            }
-            Item::Struct(item_struct) => {
-                ensure_spanned!(
-                    !has_attribute(&item_struct.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-                if has_attribute(&item_struct.attrs, "pyclass")
-                    || has_attribute_with_namespace(
-                        &item_struct.attrs,
-                        Some(pyo3_path),
-                        &["pyclass"],
-                    )
-                    || has_attribute_with_namespace(
-                        &item_struct.attrs,
-                        Some(pyo3_path),
-                        &["prelude", "pyclass"],
-                    )
-                {
-                    module_items.push(item_struct.ident.clone());
-                    module_items_cfg_attrs.push(get_cfg_attributes(&item_struct.attrs));
-                    if !has_pyo3_module_declared::<PyClassPyO3Option>(
-                        &item_struct.attrs,
-                        "pyclass",
-                        |option| matches!(option, PyClassPyO3Option::Module(_)),
-                    )? {
-                        set_module_attribute(&mut item_struct.attrs, &full_name);
-                    }
-                }
-            }
-            Item::Enum(item_enum) => {
-                ensure_spanned!(
-                    !has_attribute(&item_enum.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-                if has_attribute(&item_enum.attrs, "pyclass")
-                    || has_attribute_with_namespace(&item_enum.attrs, Some(pyo3_path), &["pyclass"])
-                    || has_attribute_with_namespace(
-                        &item_enum.attrs,
-                        Some(pyo3_path),
-                        &["prelude", "pyclass"],
-                    )
-                {
-                    module_items.push(item_enum.ident.clone());
-                    module_items_cfg_attrs.push(get_cfg_attributes(&item_enum.attrs));
-                    if !has_pyo3_module_declared::<PyClassPyO3Option>(
-                        &item_enum.attrs,
-                        "pyclass",
-                        |option| matches!(option, PyClassPyO3Option::Module(_)),
-                    )? {
-                        set_module_attribute(&mut item_enum.attrs, &full_name);
-                    }
-                }
-            }
-            Item::Mod(item_mod) => {
-                ensure_spanned!(
-                    !has_attribute(&item_mod.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-                if has_attribute(&item_mod.attrs, "pymodule")
-                    || has_attribute_with_namespace(&item_mod.attrs, Some(pyo3_path), &["pymodule"])
-                    || has_attribute_with_namespace(
-                        &item_mod.attrs,
-                        Some(pyo3_path),
-                        &["prelude", "pymodule"],
-                    )
-                {
-                    module_items.push(item_mod.ident.clone());
-                    module_items_cfg_attrs.push(get_cfg_attributes(&item_mod.attrs));
-                    if !has_pyo3_module_declared::<PyModulePyO3Option>(
-                        &item_mod.attrs,
-                        "pymodule",
-                        |option| matches!(option, PyModulePyO3Option::Module(_)),
-                    )? {
-                        set_module_attribute(&mut item_mod.attrs, &full_name);
-                    }
-                    item_mod
-                        .attrs
-                        .push(parse_quote_spanned!(item_mod.mod_token.span()=> #[pyo3(submodule)]));
-                }
-            }
-            Item::ForeignMod(item) => {
-                ensure_spanned!(
-                    !has_attribute(&item.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-            }
-            Item::Trait(item) => {
-                ensure_spanned!(
-                    !has_attribute(&item.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-            }
-            Item::Const(item) => {
-                if !find_and_remove_attribute(&mut item.attrs, "pymodule_export") {
-                    return Ok(());
-                }
-                module_consts.push(item.ident.clone());
-                module_consts_cfg_attrs.push(get_cfg_attributes(&item.attrs));
-                #[cfg(feature = "experimental-inspect")]
-                {
-                    let cfg_attrs = get_cfg_attributes(&item.attrs);
-                    let chunk = attribute_introspection_code(
-                        pyo3_path,
-                        None,
-                        item.ident.unraw().to_string(),
-                        expr_to_python(&item.expr),
-                        (*item.ty).clone(),
-                        true,
-                    );
-                    introspection_chunks.push(quote! {
-                        #(#cfg_attrs)*
-                        #chunk
-                    });
-                }
-            }
-            Item::Static(item) => {
-                ensure_spanned!(
-                    !has_attribute(&item.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-            }
-            Item::Macro(item) => {
-                ensure_spanned!(
-                    !has_attribute(&item.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-            }
-            Item::ExternCrate(item) => {
-                ensure_spanned!(
-                    !has_attribute(&item.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-            }
-            Item::Impl(item) => {
-                ensure_spanned!(
-                    !has_attribute(&item.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-            }
-            Item::TraitAlias(item) => {
-                ensure_spanned!(
-                    !has_attribute(&item.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-            }
-            Item::Type(item) => {
-                ensure_spanned!(
-                    !has_attribute(&item.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-            }
-            Item::Union(item) => {
-                ensure_spanned!(
-                    !has_attribute(&item.attrs, "pymodule_export"),
-                    item.span() => "`#[pymodule_export]` may only be used on `use` or `const` statements"
-                );
-            }
-            _ => (),
-        }
-        Ok(())
-    }).try_combine_syn_errors()?;
+    let pymodule_init = state
+        .pymodule_init
+        .as_ref()
+        .map_or(quote! {}, |ts| quote! { #ts });
 
     #[cfg(feature = "experimental-inspect")]
     let introspection = module_introspection_code(
         pyo3_path,
         &name.to_string(),
-        &module_items,
-        &module_items_cfg_attrs,
-        pymodule_init.is_some(),
+        &state.module_items,
+        &state.module_items_cfg_attrs,
+        state.pymodule_init.is_some(),
     );
     #[cfg(not(feature = "experimental-inspect"))]
     let introspection = quote! {};
@@ -394,13 +465,13 @@ pub fn pymodule_module_impl(
     let initialization = module_initialization(
         &name,
         ctx,
-        quote! { __pyo3_pymodule },
+        &quote! { __pyo3_pymodule },
         options.submodule.is_some(),
         gil_used,
-        doc,
+        &doc,
     );
 
-    let module_consts_names = module_consts.iter().map(|i| i.unraw().to_string());
+    let introspection_chunks = &state.introspection_chunks;
 
     Ok(quote!(
         #(#attrs)*
@@ -414,16 +485,8 @@ pub fn pymodule_module_impl(
 
             fn __pyo3_pymodule(module: &#pyo3_path::Bound<'_, #pyo3_path::types::PyModule>) -> #pyo3_path::PyResult<()> {
                 use #pyo3_path::impl_::pymodule::PyAddToModule;
-                #(
-                    #(#module_items_cfg_attrs)*
-                    #module_items::_PYO3_DEF.add_to_module(module)?;
-                )*
-
-                #(
-                    #(#module_consts_cfg_attrs)*
-                    #pyo3_path::types::PyModuleMethods::add(module, #module_consts_names, #module_consts)?;
-                )*
-
+                #add_items
+                #add_consts
                 #pymodule_init
                 ::std::result::Result::Ok(())
             }
@@ -433,13 +496,21 @@ pub fn pymodule_module_impl(
 
 /// Generates the function that is called by the python interpreter to initialize the native
 /// module
+/// Implement `#[pymodule]` for a function.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The module attributes are invalid.
+/// - Processing of `#[pyfn]` attributes fails.
+/// - Getting documentation fails.
 pub fn pymodule_function_impl(
     function: &mut syn::ItemFn,
     mut options: PyModuleOptions,
 ) -> Result<TokenStream> {
     options.take_pyo3_options(&mut function.attrs)?;
     process_functions_in_module(&options, function)?;
-    let ctx = &Ctx::new(&options.krate, None);
+    let ctx = &Ctx::new(options.krate.as_ref(), None);
     let Ctx { pyo3_path, .. } = ctx;
     let ident = &function.sig.ident;
     let name = options
@@ -453,10 +524,10 @@ pub fn pymodule_function_impl(
     let initialization = module_initialization(
         &name,
         ctx,
-        quote! { ModuleExec::__pyo3_module_exec },
+        &quote! { ModuleExec::__pyo3_module_exec },
         false,
         gil_used,
-        doc,
+        &doc,
     );
 
     #[cfg(feature = "experimental-inspect")]
@@ -501,10 +572,10 @@ pub fn pymodule_function_impl(
 fn module_initialization(
     name: &syn::Ident,
     ctx: &Ctx,
-    module_exec: TokenStream,
+    module_exec: &TokenStream,
     is_submodule: bool,
     gil_used: bool,
-    doc: PythonDoc,
+    doc: &PythonDoc,
 ) -> TokenStream {
     let Ctx { pyo3_path, .. } = ctx;
     let pyinit_symbol = format!("PyInit_{name}");
@@ -552,8 +623,12 @@ fn module_initialization(
 }
 
 /// Finds and takes care of the #[pyfn(...)] in `#[pymodule]`
+///
+/// # Errors
+///
+/// Returns an error if the pyfn attribute parsing fails or if pyfunction wrapping fails.
 fn process_functions_in_module(options: &PyModuleOptions, func: &mut syn::ItemFn) -> Result<()> {
-    let ctx = &Ctx::new(&options.krate, None);
+    let ctx = &Ctx::new(options.krate.as_ref(), None);
     let Ctx { pyo3_path, .. } = ctx;
     let mut stmts: Vec<syn::Stmt> = Vec::new();
 
@@ -572,12 +647,12 @@ fn process_functions_in_module(options: &PyModuleOptions, func: &mut syn::ItemFn
                         #[deprecated(note = "`pyfn` will be removed in a future PyO3 version, use declarative `#[pymodule]` with `mod` instead")]
                         #[allow(dead_code)]
                         const PYFN_ATTRIBUTE: () = ();
-                        const _: () = PYFN_ATTRIBUTE;
+                        const _: () = PYFN_ATTRIBUTE
                     }
                 };
                 stmts.extend(statements);
             }
-        };
+        }
         stmts.push(stmt);
     }
 
@@ -591,6 +666,7 @@ pub struct PyFnArgs {
 }
 
 impl Parse for PyFnArgs {
+    #[allow(clippy::needless_pass_by_value)]
     fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
         let modname = input.parse().map_err(
             |e| err_spanned!(e.span() => "expected module as first argument to #[pyfn()]"),
@@ -599,7 +675,7 @@ impl Parse for PyFnArgs {
         if input.is_empty() {
             return Ok(Self {
                 modname,
-                options: Default::default(),
+                options: PyFunctionOptions::default(),
             });
         }
 
@@ -613,6 +689,7 @@ impl Parse for PyFnArgs {
 }
 
 /// Extracts the data from the #[pyfn(...)] attribute of a function
+#[allow(clippy::needless_pass_by_value)]
 fn get_pyfn_attr(attrs: &mut Vec<syn::Attribute>) -> syn::Result<Option<(Span, PyFnArgs)>> {
     let mut pyfn_args: Option<(Span, PyFnArgs)> = None;
 
