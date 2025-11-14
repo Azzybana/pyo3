@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, Py_TYPE};
 use std::ffi::c_int;
 use std::ptr::addr_of_mut;
 
@@ -12,5 +12,5 @@ extern "C" {
 
 #[inline]
 pub unsafe fn PyRange_Check(op: *mut PyObject) -> c_int {
-    (Py_TYPE(op) == addr_of_mut!(PyRange_Type)) as c_int
+    c_int::from(Py_TYPE(op) == addr_of_mut!(PyRange_Type))
 }
