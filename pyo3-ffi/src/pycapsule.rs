@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, Py_TYPE};
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr::addr_of_mut;
 
@@ -11,6 +11,7 @@ extern "C" {
 pub type PyCapsule_Destructor = unsafe extern "C" fn(o: *mut PyObject);
 
 #[inline]
+#[allow(clippy::cast_lossless)]
 pub unsafe fn PyCapsule_CheckExact(ob: *mut PyObject) -> c_int {
     (Py_TYPE(ob) == addr_of_mut!(PyCapsule_Type)) as c_int
 }
