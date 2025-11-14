@@ -1,6 +1,6 @@
 //! C API Compatibility Shims
 //!
-//! Some CPython C API functions added in recent versions of Python are
+//! Some `CPython` C API functions added in recent versions of Python are
 //! inherently safer to use than older C API constructs. This module
 //! exposes functions available on all Python versions that wrap the
 //! old C API on old Python versions and wrap the function directly
