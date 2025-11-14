@@ -101,7 +101,18 @@ impl From<std::convert::Infallible> for Error {
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub trait Context<T> {
+    /// Wrap the error value with additional context.
+    ///
+    /// # Errors
+    ///
+    /// Returns the original error wrapped with additional context.
     fn context(self, message: impl Into<String>) -> Result<T>;
+
+    /// Wrap the error value with additional context that is evaluated lazily only once an error does occur.
+    ///
+    /// # Errors
+    ///
+    /// Returns the original error wrapped with additional context.
     fn with_context(self, message: impl FnOnce() -> String) -> Result<T>;
 }
 
