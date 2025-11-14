@@ -24,7 +24,7 @@ impl<'a> Enum<'a> {
     fn new(
         data_enum: &'a DataEnum,
         ident: &'a Ident,
-        options: ContainerAttributes,
+        options: &ContainerAttributes,
     ) -> Result<Self> {
         ensure_spanned!(
             !data_enum.variants.is_empty(),
@@ -47,7 +47,7 @@ impl<'a> Enum<'a> {
                 Container::new(
                     &variant.fields,
                     parse_quote!(#ident::#var_ident),
-                    variant_options,
+                    &variant_options,
                 )
             })
             .collect::<Result<Vec<_>>>()?;
@@ -60,6 +60,26 @@ impl<'a> Enum<'a> {
 
     /// Build derivation body for enums.
     fn build(&self, ctx: &Ctx) -> TokenStream {
+        let (var_extracts, variant_names, error_names) = self.build_variant_extracts(ctx);
+        let Ctx { pyo3_path, .. } = ctx;
+        let ty_name = self.enum_ident.to_string();
+        quote!(
+            let errors = [
+                #(#var_extracts),*
+            ];
+            ::std::result::Result::Err(
+                #pyo3_path::impl_::frompyobject::failed_to_extract_enum(
+                    obj.py(),
+                    #ty_name,
+                    &[#(#variant_names),*],
+                    &[#(#error_names),*],
+                    &errors
+                )
+            )
+        )
+    }
+
+    fn build_variant_extracts(&self, ctx: &Ctx) -> (Vec<TokenStream>, Vec<String>, Vec<String>) {
         let Ctx { pyo3_path, .. } = ctx;
         let mut var_extracts = Vec::new();
         let mut variant_names = Vec::new();
@@ -79,24 +99,15 @@ impl<'a> Enum<'a> {
             });
 
             var_extracts.push(ext);
-            variant_names.push(var.path.segments.last().unwrap().ident.to_string());
-            error_names.push(&var.err_name);
+            let last_segment = var
+                .path
+                .segments
+                .last()
+                .expect("variant path should have segments");
+            variant_names.push(last_segment.ident.to_string());
+            error_names.push(var.err_name.clone());
         }
-        let ty_name = self.enum_ident.to_string();
-        quote!(
-            let errors = [
-                #(#var_extracts),*
-            ];
-            ::std::result::Result::Err(
-                #pyo3_path::impl_::frompyobject::failed_to_extract_enum(
-                    obj.py(),
-                    #ty_name,
-                    &[#(#variant_names),*],
-                    &[#(#error_names),*],
-                    &errors
-                )
-            )
-        )
+        (var_extracts, variant_names, error_names)
     }
 
     #[cfg(feature = "experimental-inspect")]
@@ -161,120 +172,139 @@ impl<'a> Container<'a> {
     /// Construct a container based on fields, identifier and attributes.
     ///
     /// Fails if the variant has no fields or incompatible attributes.
-    fn new(fields: &'a Fields, path: syn::Path, options: ContainerAttributes) -> Result<Self> {
+    fn new(fields: &'a Fields, path: syn::Path, options: &ContainerAttributes) -> Result<Self> {
         let style = match fields {
             Fields::Unnamed(unnamed) if !unnamed.unnamed.is_empty() => {
-                ensure_spanned!(
-                    options.rename_all.is_none(),
-                    options.rename_all.span() => "`rename_all` is useless on tuple structs and variants."
-                );
-                let mut tuple_fields = unnamed
-                    .unnamed
-                    .iter()
-                    .map(|field| {
-                        let attrs = FieldAttributes::from_attrs(&field.attrs)?;
-                        ensure_spanned!(
-                            attrs.getter.is_none(),
-                            field.span() => "`getter` is not permitted on tuple struct elements."
-                        );
-                        ensure_spanned!(
-                            attrs.default.is_none(),
-                            field.span() => "`default` is not permitted on tuple struct elements."
-                        );
-                        Ok(TupleStructField {
-                            from_py_with: attrs.from_py_with,
-                            ty: field.ty.clone(),
-                        })
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                if tuple_fields.len() == 1 {
-                    // Always treat a 1-length tuple struct as "transparent", even without the
-                    // explicit annotation.
-                    let field = tuple_fields.pop().unwrap();
-                    ContainerType::TupleNewtype(field.from_py_with, Box::new(field.ty))
-                } else if options.transparent.is_some() {
-                    bail_spanned!(
-                        fields.span() => "transparent structs and variants can only have 1 field"
-                    );
-                } else {
-                    ContainerType::Tuple(tuple_fields)
-                }
+                Self::handle_unnamed_fields(&unnamed.unnamed, options)?
             }
             Fields::Named(named) if !named.named.is_empty() => {
-                let mut struct_fields = named
-                    .named
-                    .iter()
-                    .map(|field| {
-                        let ident = field
-                            .ident
-                            .as_ref()
-                            .expect("Named fields should have identifiers");
-                        let mut attrs = FieldAttributes::from_attrs(&field.attrs)?;
-
-                        if let Some(ref from_item_all) = options.from_item_all {
-                            if let Some(replaced) = attrs.getter.replace(FieldGetter::GetItem(parse_quote!(item), None))
-                            {
-                                match replaced {
-                                    FieldGetter::GetItem(item, Some(item_name)) => {
-                                        attrs.getter = Some(FieldGetter::GetItem(item, Some(item_name)));
-                                    }
-                                    FieldGetter::GetItem(_, None) => bail_spanned!(from_item_all.span() => "Useless `item` - the struct is already annotated with `from_item_all`"),
-                                    FieldGetter::GetAttr(_, _) => bail_spanned!(
-                                        from_item_all.span() => "The struct is already annotated with `from_item_all`, `attribute` is not allowed"
-                                    ),
-                                }
-                            }
-                        }
-
-                        Ok(NamedStructField {
-                            ident,
-                            getter: attrs.getter,
-                            from_py_with: attrs.from_py_with,
-                            default: attrs.default,
-                            ty: &field.ty,
-                        })
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                if struct_fields.iter().all(|field| field.default.is_some()) {
-                    bail_spanned!(
-                        fields.span() => "cannot derive FromPyObject for structs and variants with only default values"
-                    )
-                } else if options.transparent.is_some() {
-                    ensure_spanned!(
-                        struct_fields.len() == 1,
-                        fields.span() => "transparent structs and variants can only have 1 field"
-                    );
-                    ensure_spanned!(
-                        options.rename_all.is_none(),
-                        options.rename_all.span() => "`rename_all` is not permitted on `transparent` structs and variants"
-                    );
-                    let field = struct_fields.pop().unwrap();
-                    ensure_spanned!(
-                        field.getter.is_none(),
-                        field.ident.span() => "`transparent` structs may not have a `getter` for the inner field"
-                    );
-                    ContainerType::StructNewtype(field.ident, field.from_py_with, field.ty)
-                } else {
-                    ContainerType::Struct(struct_fields)
-                }
+                Self::handle_named_fields(&named.named, options)?
             }
             _ => bail_spanned!(
                 fields.span() => "cannot derive FromPyObject for empty structs and variants"
             ),
         };
-        let err_name = options.annotation.map_or_else(
+        let err_name = options.annotation.as_ref().map_or_else(
             || path.segments.last().unwrap().ident.to_string(),
-            |lit_str| lit_str.value(),
+            syn::LitStr::value,
         );
 
         let v = Container {
             path,
             ty: style,
             err_name,
-            rename_rule: options.rename_all.map(|v| v.value.rule),
+            rename_rule: options.rename_all.as_ref().map(|v| v.value.rule),
         };
         Ok(v)
+    }
+
+    fn handle_unnamed_fields(
+        unnamed: &syn::punctuated::Punctuated<syn::Field, syn::Token![,]>,
+        options: &ContainerAttributes,
+    ) -> Result<ContainerType<'a>> {
+        ensure_spanned!(
+            options.rename_all.is_none(),
+            options.rename_all.span() => "`rename_all` is useless on tuple structs and variants."
+        );
+        let mut tuple_fields = unnamed
+            .iter()
+            .map(|field| {
+                let attrs = FieldAttributes::from_attrs(&field.attrs)?;
+                ensure_spanned!(
+                    attrs.getter.is_none(),
+                    field.span() => "`getter` is not permitted on tuple struct elements."
+                );
+                ensure_spanned!(
+                    attrs.default.is_none(),
+                    field.span() => "`default` is not permitted on tuple struct elements."
+                );
+                Ok(TupleStructField {
+                    from_py_with: attrs.from_py_with,
+                    ty: field.ty.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        if tuple_fields.len() == 1 {
+            // Always treat a 1-length tuple struct as "transparent", even without the
+            // explicit annotation.
+            let field = tuple_fields.pop().unwrap();
+            Ok(ContainerType::TupleNewtype(
+                field.from_py_with,
+                Box::new(field.ty),
+            ))
+        } else if options.transparent.is_some() {
+            bail_spanned!(
+                unnamed.span() => "transparent structs and variants can only have 1 field"
+            );
+        } else {
+            Ok(ContainerType::Tuple(tuple_fields))
+        }
+    }
+
+    fn handle_named_fields(
+        named: &'a syn::punctuated::Punctuated<syn::Field, syn::Token![,]>,
+        options: &ContainerAttributes,
+    ) -> Result<ContainerType<'a>> {
+        let mut struct_fields = named
+            .iter()
+            .map(|field| {
+                let ident = field
+                    .ident
+                    .as_ref()
+                    .unwrap();
+                let mut attrs = FieldAttributes::from_attrs(&field.attrs)?;
+
+                if let Some(ref from_item_all) = options.from_item_all {
+                    if let Some(replaced) = attrs.getter.replace(FieldGetter::GetItem(parse_quote!(item), None))
+                    {
+                        match replaced {
+                            FieldGetter::GetItem(item, Some(item_name)) => {
+                                attrs.getter = Some(FieldGetter::GetItem(item, Some(item_name)));
+                            }
+                            FieldGetter::GetItem(_, None) => bail_spanned!(from_item_all.span() => "Useless `item` - the struct is already annotated with `from_item_all`"),
+                            FieldGetter::GetAttr(_, _) => bail_spanned!(
+                                from_item_all.span() => "The struct is already annotated with `from_item_all`, `attribute` is not allowed"
+                            ),
+                        }
+                    }
+                }
+
+                Ok(NamedStructField {
+                    ident,
+                    getter: attrs.getter,
+                    from_py_with: attrs.from_py_with,
+                    default: attrs.default,
+                    ty: &field.ty,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        if struct_fields.iter().all(|field| field.default.is_some()) {
+            bail_spanned!(
+                named.span() => "cannot derive FromPyObject for structs and variants with only default values"
+            )
+        } else if options.transparent.is_some() {
+            ensure_spanned!(
+                struct_fields.len() == 1,
+                named.span() => "transparent structs and variants can only have 1 field"
+            );
+            ensure_spanned!(
+                options.rename_all.is_none(),
+                options.rename_all.span() => "`rename_all` is not permitted on `transparent` structs and variants"
+            );
+            let field = struct_fields.pop().unwrap();
+            ensure_spanned!(
+                field.getter.is_none(),
+                field.ident.span() => "`transparent` structs may not have a `getter` for the inner field"
+            );
+            Ok(ContainerType::StructNewtype(
+                field.ident,
+                field.from_py_with,
+                field.ty,
+            ))
+        } else {
+            Ok(ContainerType::Struct(struct_fields))
+        }
     }
 
     fn name(&self) -> String {
@@ -313,11 +343,10 @@ impl<'a> Container<'a> {
         let struct_name = self.name();
         if let Some(ident) = field_ident {
             let field_name = ident.to_string();
-            if let Some(from) = from_py_with
-            {
-                    let extractor = quote_spanned! { from.kw.span =>
-                        { let from_py_with: fn(_) -> _ = #from.value; from_py_with }
-                    };
+            if let Some(from) = from_py_with {
+                let extractor = quote_spanned! { from.kw.span =>
+                    { let from_py_with: fn(_) -> _ = #from.value; from_py_with }
+                };
                 quote! {
                     Ok(#self_ty {
                         #ident: #pyo3_path::impl_::frompyobject::extract_struct_field_with(#extractor, obj, #struct_name, #field_name)?
@@ -330,8 +359,7 @@ impl<'a> Container<'a> {
                     })
                 }
             }
-        } else if let Some(from) = from_py_with
-        {
+        } else if let Some(from) = from_py_with {
             let extractor = quote_spanned! { from.kw.span =>
                 { let from_py_with: fn(_) -> _ = #from.value; from_py_with }
             };
@@ -509,9 +537,13 @@ fn verify_and_get_lifetime(generics: &syn::Generics) -> Result<Option<&syn::Life
 ///   * Fields of input structs and enums must implement `FromPyObject` or be annotated with `from_py_with`
 ///   * Derivation for structs with generic fields like `struct<T> Foo(T)`
 ///     adds `T: FromPyObject` on the derived implementation.
+///
+/// # Errors
+///
+/// Returns an error if the derive attributes are invalid or if the type does not meet the requirements for derivation.
 pub fn build_derive_from_pyobject(tokens: &DeriveInput) -> Result<TokenStream> {
     let options = ContainerAttributes::from_attrs(&tokens.attrs)?;
-    let ctx = &Ctx::new(&options.krate, None);
+    let ctx = &Ctx::new(options.krate.as_ref(), None);
     let Ctx { pyo3_path, .. } = &ctx;
 
     let (_, ty_generics, _) = tokens.generics.split_for_impl();
@@ -529,7 +561,7 @@ pub fn build_derive_from_pyobject(tokens: &DeriveInput) -> Result<TokenStream> {
         let gen_ident = &param.ident;
         where_clause
             .predicates
-            .push(parse_quote!(#gen_ident: #pyo3_path::conversion::FromPyObjectOwned<#lt_param>))
+            .push(parse_quote!(#gen_ident: #pyo3_path::conversion::FromPyObjectOwned<#lt_param>));
     }
 
     let derives = match &tokens.data {
@@ -538,7 +570,7 @@ pub fn build_derive_from_pyobject(tokens: &DeriveInput) -> Result<TokenStream> {
                 bail_spanned!(tokens.span() => "`transparent` or `annotation` is not supported \
                                                 at top level for enums");
             }
-            let en = Enum::new(en, &tokens.ident, options.clone())?;
+            let en = Enum::new(en, &tokens.ident, &options)?;
             en.build(ctx)
         }
         syn::Data::Struct(st) => {
@@ -546,7 +578,7 @@ pub fn build_derive_from_pyobject(tokens: &DeriveInput) -> Result<TokenStream> {
                 bail_spanned!(lit_str.span() => "`annotation` is unsupported for structs");
             }
             let ident = &tokens.ident;
-            let st = Container::new(&st.fields, parse_quote!(#ident), options.clone())?;
+            let st = Container::new(&st.fields, parse_quote!(#ident), &options)?;
             st.build(ctx)
         }
         syn::Data::Union(_) => bail_spanned!(
@@ -567,8 +599,7 @@ pub fn build_derive_from_pyobject(tokens: &DeriveInput) -> Result<TokenStream> {
                 syn::Data::Enum(en) => Enum::new(en, &tokens.ident, options)?.input_type(ctx),
                 syn::Data::Struct(st) => {
                     let ident = &tokens.ident;
-                    Container::new(&st.fields, parse_quote!(#ident), options.clone())?
-                        .input_type(ctx)
+                    Container::new(&st.fields, parse_quote!(#ident), &options)?.input_type(ctx)
                 }
                 syn::Data::Union(_) => {
                     // Not supported at this point
