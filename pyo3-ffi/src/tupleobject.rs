@@ -1,4 +1,4 @@
-use crate::object::*;
+use crate::object::{PyTypeObject, PyObject, PyType_FastSubclass, Py_TPFLAGS_TUPLE_SUBCLASS, Py_TYPE};
 use crate::pyport::Py_ssize_t;
 use std::ffi::c_int;
 use std::ptr::addr_of_mut;
@@ -16,6 +16,7 @@ pub unsafe fn PyTuple_Check(op: *mut PyObject) -> c_int {
 }
 
 #[inline]
+#[allow(clippy::cast_lossless)]
 pub unsafe fn PyTuple_CheckExact(op: *mut PyObject) -> c_int {
     (Py_TYPE(op) == addr_of_mut!(PyTuple_Type)) as c_int
 }
