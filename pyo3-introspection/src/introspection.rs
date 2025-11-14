@@ -18,9 +18,13 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::{fmt, fs, str};
 
-/// Introspect a cdylib built with PyO3 and returns the definition of a Python module.
+/// Introspect a cdylib built with `PyO3` and returns the definition of a Python module.
 ///
 /// This function currently supports the ELF (most *nix including Linux), Match-O (macOS) and PE (Windows) formats.
+///
+/// # Errors
+///
+/// Returns an error if the library cannot be read, parsed, or if the module is not found.
 pub fn introspect_cdylib(library_path: impl AsRef<Path>, main_module_name: &str) -> Result<Module> {
     let chunks = find_introspection_chunks_in_binary_object(library_path.as_ref())?;
     parse_chunks(&chunks, main_module_name)
@@ -125,7 +129,7 @@ fn convert_members<'a>(
                 )?);
             }
             Chunk::Class { name, id } => {
-                classes.push(convert_class(id, name, chunks_by_id, chunks_by_parent)?)
+                classes.push(convert_class(id, name, chunks_by_id, chunks_by_parent)?);
             }
             Chunk::Function {
                 name,
@@ -134,14 +138,14 @@ fn convert_members<'a>(
                 parent: _,
                 decorators,
                 returns,
-            } => functions.push(convert_function(name, arguments, decorators, returns)?),
+            } => functions.push(convert_function(name, arguments, decorators, returns.as_ref())?),
             Chunk::Attribute {
                 name,
                 id: _,
                 parent: _,
                 value,
                 annotation,
-            } => attributes.push(convert_attribute(name, value, annotation)),
+            } => attributes.push(convert_attribute(name, value.as_ref(), annotation.as_ref())),
         }
     }
     // We sort elements to get a stable output
@@ -205,7 +209,7 @@ fn convert_function(
     name: &str,
     arguments: &ChunkArguments,
     decorators: &[ChunkTypeHint],
-    returns: &Option<ChunkTypeHint>,
+    returns: Option<&ChunkTypeHint>,
 ) -> Result<Function> {
     Ok(Function {
         name: name.into(),
@@ -238,7 +242,7 @@ fn convert_function(
                 .as_ref()
                 .map(convert_variable_length_argument),
         },
-        returns: returns.as_ref().map(convert_type_hint),
+        returns: returns.map(convert_type_hint),
     })
 }
 
@@ -259,13 +263,13 @@ fn convert_variable_length_argument(arg: &ChunkArgument) -> VariableLengthArgume
 
 fn convert_attribute(
     name: &str,
-    value: &Option<String>,
-    annotation: &Option<ChunkTypeHint>,
+    value: Option<&String>,
+    annotation: Option<&ChunkTypeHint>,
 ) -> Attribute {
     Attribute {
         name: name.into(),
-        value: value.clone(),
-        annotation: annotation.as_ref().map(convert_type_hint),
+        value: value.cloned(),
+        annotation: annotation.map(convert_type_hint),
     }
 }
 
